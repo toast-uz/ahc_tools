@@ -30,12 +30,12 @@ print('Creating rust-toolchain...')
 with open('rust-toolchain', 'w') as f:
     f.write('1.70.0\n')
 
-# tools/inが無ければ作成する
-if not os.path.isdir('tools/in'):
-    print('Creating tools/in...')
-    os.mkdir('tools/in')
+# tools/outが無ければ作成する
+if not os.path.isdir('tools/out'):
+    print('Creating tools/out...')
+    os.mkdir('tools/out')
 else:
-    print('Found tools/in.')
+    print('Found tools/out.')
 
 # toolsのツール群をコンパイルする
 print('Compiling tools...')
