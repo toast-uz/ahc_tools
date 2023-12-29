@@ -8,7 +8,7 @@ AtCoderヒューリスティックコンテストの、ローカルテストを�
 
 ## 特徴
 
-前作(https://qiita.com/toast-uz/items/b798cd24d3805aef2d80)の以下の特徴を継承しています。
+前作 [【競プロ】テスト10倍速！AtCoder AHC向け【Python】自動テスト並列処理ツール](https://qiita.com/toast-uz/items/b798cd24d3805aef2d80) の以下の特徴を継承しています。
 
 - ローカルテストための初期環境整備（`steup.py`として独立）
 - テスト対象プログラムの更新を検知して自動再コンパイル
