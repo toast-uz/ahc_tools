@@ -26,7 +26,7 @@ AtCoderヒューリスティックコンテストの、ローカルテストを�
 - テストケースの特徴量によるスコア差がわかりやすくなるように、特徴量をスコアとあわせて表示
 - 相対スコアゲーに効果ある $Σ\log(1+score)$ 評価を追加
 - Optunaに対応、ストレージ、enqueue_trial、枝刈りにも対応
-- https://img.atcoder.jp/ahc_standings/ （以下、ahc-standingsと呼びます）のローカル実行に対応
+- https://img.atcoder.jp/ahc_standings/index.html （以下、ahc_standingsと呼びます）のローカル実行に対応
 
 ## 使い方
 
@@ -70,7 +70,7 @@ ParentDir
 tools/out
 ``````
 
-- 自動でhttps://img.atcoder.jp/ahc_standings/ から `index.html`をダウンロードして`tools/out`に配置してくれます。
+- 自動でahc_standingsから `index.html`をダウンロードして`tools/out`に配置してくれます。
 
 - 運営から提供されたローカルテストツールを、自動でコンパイルしてくれます。
 
@@ -114,7 +114,7 @@ FEATURES = ['N', 'M', 'K']  # 特徴量
 
 スコア合計や、logスコア合計について、プログラム処理変更前後の差異を確認し、プログラムの改善度合いを確認します。
 
-さらに、ahc-standingsによって、ダッシュボードを使って、試行全体の分析をすることが可能です。以下のコマンドでahc-standingsをローカルサーバとして起動できます。
+さらに、ahc_standingsによって、ダッシュボードを使って、試行全体の分析をすることが可能です。以下のコマンドでahc_standingsをローカルサーバとして起動できます。
 
 `python -m http.server --directory tools/out 8000`
 
