@@ -47,8 +47,8 @@ def main():
     os.chdir('tools')
     os.system('cargo build --release')
     os.chdir('..')
-    # AtCoder Standingsをダウンロードする
-    print('Downloading AtCoder Standings...')
+    # ahc_standingsをダウンロードする
+    print('Downloading ahc_standings ...')
     os.system(f'curl {AHC_STANDINGS_URL} -o tools/out/index.html')
 
 if __name__ == '__main__':

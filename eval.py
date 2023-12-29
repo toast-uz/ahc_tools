@@ -12,7 +12,7 @@
 # Related tools usage:
 # View optuna-db: optuna-dashboard sqlite:///tools/out/optuna.db
 #   url_example: http://127.0.0.1:8080/
-# ahc-standings: python -m http.server --directory tools/out 8000
+# ahc_standings: python -m http.server --directory tools/out 8000
 #   url_example: http://127.0.0.1:8000/index.html?contest=0_99
 
 import ray
@@ -196,7 +196,7 @@ class Objective:
         self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'      
             f' -> x{results.duration_sum / duration_total:.1f} faster than sequential.')
         
-    # 結果をahc-standingsに追加する
+    # 結果をahc_standingsに追加する
     def add_standings_(self, results):
         dir_ = f'tools/out/{self.test_ids[0]}_{self.test_ids[-1]}'
         os.makedirs(dir_, exist_ok=True)
