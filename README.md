@@ -157,3 +157,31 @@ PARAMS = {
 試行全体の結果は、Optunaストレージに保存されていますので、optuna-dashboardによって分析することが可能です。以下のコマンドでoptuna-dashboardが起動します。
 
 `optuna-dashboard sqlite:///tools/out/optuna.db`
+
+#### おまけ. ハイパーパラメータを受け取る実装例（Rust）
+
+```Rust
+// 環境変数が無かった時のデフォルト値（=最終提出するベストな値を入れる）
+const P1: usize = 5;
+const P2: f64 = 0.5;
+
+fn main() {
+    // 環境変数の取得
+    let p1: usize = os_env::get::<usize>("p1").unwrap_or(P1);
+    let p2: f64 = os_env::get::<f64>("p2").unwrap_or(P2);
+    println!("p1: {p1}, p2: {p2}");
+}
+
+// 他の環境変数とのバッティングを避けるため、プレフィックスをつけ、
+// AHC_PARAMS_P1, AHC_PARAMS_P2が環境変数となる
+pub mod os_env {
+    const PREFIX: &str = "AHC_PARAMS_";
+
+    pub fn get<T: std::str::FromStr>(name: &str) -> Option<T> {
+        let name = format!("{}{}", PREFIX, name.to_uppercase());
+        let res = std::env::var(name).ok()?;
+        res.parse().ok()
+    }    
+}
+
+```
