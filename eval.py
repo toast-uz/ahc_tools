@@ -50,7 +50,8 @@ BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
 
 # 環境変数で流し込むパラメータ
-# 1番目は最小値、2番目は最大値、3番目はenque_trialの初期値(optional) 
+# int: suugest_intの係数、float: suggest_floatの係数
+# enque: enque_trialの値（複数あれば複数回実行）
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
     'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
@@ -79,7 +80,7 @@ def single_test(id, env=None, visible=False):
     if visible:
         for line in stderr.split('\n'):
             print(f'{BLUE}{line}{NORMAL}')
-    # スコアを正規表現（最後に空白行が出る可能性があるため、stderr後ろ5行でマッチさせる）
+    # スコアを取得する
     score = get_score_from_log(stderr.rstrip())
     if score is not None:
         return id, (score, duration)

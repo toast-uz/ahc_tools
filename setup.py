@@ -1,6 +1,6 @@
 #!python
 
-# AHC環境セットアップ用スクリプト
+# Setup script for the tester driver
 # Copyright (c) 2023 toast-uz
 # Released under the MIT license
 # https://opensource.org/licenses/mit-license.php
