@@ -38,6 +38,11 @@ def main():
     create_if_not_exists('.gitignore', 'file', GITIGNORE)
     create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
     create_if_not_exists('tools/out', 'dir')
+    # toolsの古いビルドを削除する
+    print('Removing old tools build...')
+    os.chdir('tools')
+    os.system('cargo clean')
+    os.chdir('..')
     # toolsのツール群をコンパイルする
     print('Compiling tools...')
     os.chdir('tools')
