@@ -1,9 +1,6 @@
 #!python
 
 # Tester driver for AtCoder Heuristic Contest
-# Copyright (c) 2023 toast-uz
-# Released under the MIT license
-# https://opensource.org/licenses/mit-license.php
  
 # Show help: python eval.py --help
 # Verified by Python3.11 on MacOS Sonoma

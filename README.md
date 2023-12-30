@@ -1,9 +1,5 @@
 # AtCoder Heuristic Contenst Tools
 
-Copyright (c) 2023 toast-uz  
-Released under the MIT license  
-https://opensource.org/licenses/mit-license.php
-
 AtCoderヒューリスティックコンテストの、ローカルテストをサポートするツールです。
 
 ## 特徴
