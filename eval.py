@@ -133,7 +133,7 @@ class Objective:
         self.sequential = args.seq
         self.visible = False if dummy_test else args.visible
         self.debug = False if dummy_test or args.optuna > 0 else not args.silent
-        self.standings = False if args.optuna > 0 or len(self.test_ids) == 1 else args.standings
+        self.standings = False if dummy_test else args.standings
         if dummy_test: self.dbg_('Dummy test after compile.')
         num_cpus = cpu_count()
         self.max_concurrent_workers = 1 if self.sequential else max(1, num_cpus - 1)
