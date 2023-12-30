@@ -172,12 +172,11 @@ class Objective:
     def set_env_(self, trial):
         env = os.environ.copy()
         if not trial: return env
-        for key, value in value.items():
-            step = None if len(value) < 3 else value[2]
-            log = False if len(value) < 4 else value[3]
-            if key == 'int':
+        for name, value in value.items():
+            step, log = value.get(2, None), value.get(3, False)
+            if name == 'int':
                 env[name] = str(trial.suggest_int(name, *value[:2], step=step, log=log))
-            elif key == 'float':
+            elif name == 'float':
                 env[name] = str(trial.suggest_float(name, *value[:2], step=step, log=log))
         return env
 
