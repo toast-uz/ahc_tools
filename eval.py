@@ -172,12 +172,13 @@ class Objective:
     def set_env_(self, trial):
         env = os.environ.copy()
         if not trial: return env
-        for name, value in PARAMS.items():
-            for key, value in value.items():
-                if key == 'int':
-                    env[name] = str(trial.suggest_int(name, *value))
-                elif key == 'float':
-                    env[name] = str(trial.suggest_float(name, *value))
+        for key, value in value.items():
+            step = None if len(value) < 3 else value[2]
+            log = False if len(value) < 4 else value[3]
+            if key == 'int':
+                env[name] = str(trial.suggest_int(name, *value[:2], step=step, log=log))
+            elif key == 'float':
+                env[name] = str(trial.suggest_float(name, *value[:2], step=step, log=log))
         return env
 
     # 並列テストの結果を集計する（Optunaの枝刈りも行う）
