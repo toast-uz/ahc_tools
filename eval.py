@@ -47,7 +47,7 @@ BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
 
 # 環境変数で流し込むパラメータ
-# int: suugest_intの係数、float: suggest_floatの係数
+# int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
 # enque: enque_trialの値（複数あれば複数回実行）
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
