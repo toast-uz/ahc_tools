@@ -78,6 +78,9 @@ def single_test(id, env=None, visible=False):
         for line in stderr.split('\n'):
             print(f'{BLUE}{line}{NORMAL}')
     # スコアを取得する
+    # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
+    # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
+    # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
     score = get_score_from_log(stderr.rstrip())
     if score is not None:
         return id, (score, duration)
@@ -124,6 +127,7 @@ class Results:
         self.duration_max = max(self.duration_max, result.duration)
 
 class Objective:
+    # コマンドライン引数をもとに、テスト動作のオプションを設定する
     def __init__(self, args, dummy_test=False):
         self.test_ids = [args.specified[0]] if dummy_test else list(range(args.specified[0], args.specified[-1] + 1))
         self.sequential = args.seq
@@ -135,6 +139,7 @@ class Objective:
         self.max_concurrent_workers = 1 if self.sequential else max(1, num_cpus - 1)
         self.dbg_(f'{num_cpus=} max_concurrent_workers={self.max_concurrent_workers}')
 
+    # Optunaで最適化できるように、Objectiveのクラスオブジェクトを、関数型で呼び出せるようにする
     def __call__(self, trial=None):
         # 並列テスト実行
         self.dbg_('Testing...', flush=True)
@@ -146,10 +151,9 @@ class Objective:
             worker = single_test.remote(id, env, visible=self.visible)
             workers.append(worker)
             if len(workers) >= self.max_concurrent_workers:
-                finished, remaining = ray.wait(workers, num_returns=1)
-                self.eval_result_(trial, finished, raw_results, results)
-                workers = remaining
-        self.eval_result_(trial, workers, raw_results, results)
+                finished, workers = ray.wait(workers, num_returns=1)
+                self.eval_result_(trial, finished, raw_results, results)    # 結果集計と枝刈り
+        self.eval_result_(trial, workers, raw_results, results) # 残った結果集計と枝刈り
         self.dbg_('done.')
         # 後処理
         duration_total = time.time() - start_time
@@ -169,14 +173,15 @@ class Objective:
                     env[name] = str(trial.suggest_float(name, *value))
         return env
 
-    # 並列テストの結果を集計する
+    # 並列テストの結果を集計する（Optunaの枝刈りも行う）
     def eval_result_(self, trial, workers, raw_results, results):
         for result in ray.get(workers):
             raw_results[result[0]] = result[1]
+        # 並列処理のためテストケースの終了順序は不定であるが、枝刈りできるようにテストケース順通りに集計する
         while len(results) < len(self.test_ids) and (id := self.test_ids[len(results)]) in raw_results:
             results.append(Result(id, *raw_results[id]))
             if not trial: continue
-            trial.report(-results.logscore_sum, len(results))
+            trial.report(-results.logscore_sum, len(results)) # Optunaに結果を報告して枝刈りする
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
@@ -220,6 +225,7 @@ class Objective:
                 f.write(f',{round(result.logscore * 100000000)}')
             f.write('\n')
     
+# コマンドライン引数をパースする
 def parser():
     parser = argparse.ArgumentParser(description='Tester driver for AtCoder Heuristic Contest')
     parser.add_argument(
@@ -233,6 +239,7 @@ def parser():
         help='optuna n_trials, forced --silent', default=0)
     return parser.parse_args()
 
+# 提出プログラムのソースが更新されていたらコンパイルする
 def compile(args):
     if TESTEE_COMPILE is None:
         return False
@@ -243,17 +250,17 @@ def compile(args):
     if cp.returncode != 0:
         print(cp.stderr)
         exit(1)
-    Objective(args, dummy_test=True)()  # 初回は遅いので、1回だけ実行しておく
+    Objective(args, dummy_test=True)()  # 初回実行は遅いので、計測前に1回だけダミー実行しておく
     return True
 
 def main():
     args = parser()
     ray.init(configure_logging=False)
-    compile(args)    # テスト対象のコンパイル
-    if args.optuna == 0:
-        Objective(args)()   # 通常のテスト
+    compile(args)
+    if args.optuna == 0:    # Optunaを使わないなら、通常のテストを実施して終了する
+        Objective(args)()
         return
-    # optuna studyの生成
+    # Optuna studyの生成
     pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=50)
     study = optuna.create_study(
         pruner=pruner,
@@ -270,7 +277,7 @@ def main():
     for i in range(best_params_len):
         params = { k: v[i] for k, v in best_params.items() if len(v) > i }
         study.enqueue_trial(params)
-    # optuna studyの実行
+    # Optuna studyの最適化
     study.optimize(Objective(args), n_trials=args.optuna)
 
 if __name__ == '__main__':
