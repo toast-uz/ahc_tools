@@ -1,7 +1,9 @@
 testcases/
 tools/
+srs/
 Cargo.lock
 .vscode/
+.pytest_cache/
 main.py
 rust-toolchain
 vis.html
