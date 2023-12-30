@@ -32,7 +32,7 @@ if not os.path.isfile(TESTER):
 
 if LANGUAGE == 'Python':
     TESTEE_SOURCE = 'main.py'             # Pythonの場合
-    TESTEE = f'pypy {TESTEE_SOURCE}'      # Pythonの場合
+    TESTEE = f'pypy3 {TESTEE_SOURCE}'      # Pythonの場合
     TESTEE_COMPILE = None                 # Pythonの場合
 elif LANGUAGE == 'Rust':
     TESTEE_SOURCE = f'src/bin/a.rs'     # Rustの場合
