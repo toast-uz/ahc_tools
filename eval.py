@@ -129,15 +129,22 @@ class Results:
 class Objective:
     # コマンドライン引数をもとに、テスト動作のオプションを設定する
     def __init__(self, args, dummy_test=False):
-        self.test_ids = [args.specified[0]] if dummy_test else list(range(args.specified[0], args.specified[-1] + 1))
-        self.sequential = args.seq
-        self.visible = False if dummy_test else args.visible
-        self.debug = False if dummy_test or args.optuna > 0 else not args.silent
-        self.standings = False if dummy_test else args.standings
-        if dummy_test: self.dbg_('Dummy test after compile.')
-        num_cpus = cpu_count()
-        self.max_concurrent_workers = 1 if self.sequential else max(1, num_cpus - 1)
-        self.dbg_(f'{num_cpus=} max_concurrent_workers={self.max_concurrent_workers}')
+        if dummy_test:
+            self.debug = not args.silent
+            self.dbg_('Testing as a dummy because just compiled.')
+            self.debug = False
+            self.max_concurrent_workers = 1
+            self.test_ids = [args.specified[0]]
+            self.visible = False
+            self.standings = False
+        else:
+            self.debug = False if args.optuna > 0 else not args.silent
+            num_cpus = cpu_count()
+            self.max_concurrent_workers = 1 if args.seq else max(1, num_cpus - 1)
+            self.dbg_(f'{num_cpus=} max_concurrent_workers={self.max_concurrent_workers}')
+            self.test_ids = list(range(args.specified[0], args.specified[-1] + 1))
+            self.visible = args.visible
+            self.standings = args.standings
 
     # Optunaで最適化できるように、Objectiveのインスタンスを、関数型で呼び出せるようにする
     def __call__(self, trial=None):
