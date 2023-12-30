@@ -139,7 +139,7 @@ class Objective:
         self.max_concurrent_workers = 1 if self.sequential else max(1, num_cpus - 1)
         self.dbg_(f'{num_cpus=} max_concurrent_workers={self.max_concurrent_workers}')
 
-    # Optunaで最適化できるように、Objectiveのクラスオブジェクトを、関数型で呼び出せるようにする
+    # Optunaで最適化できるように、Objectiveのインスタンスを、関数型で呼び出せるようにする
     def __call__(self, trial=None):
         # 並列テスト実行
         self.dbg_('Testing...', flush=True)
