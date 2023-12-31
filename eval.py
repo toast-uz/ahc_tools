@@ -54,12 +54,12 @@ PARAMS = {
     'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
 }
 
-# ログの最後の方から Score = 数字 を探して、スコアを取得する
+# ログの最後の行から Score = 数字 を探して、スコアを取得する
 def get_score_from_log(log):
     try:
-        for line in reversed(log.split('\n')[-5:]):
-            if line.split()[0] == 'Score':
-                return int(line.split()[-1])
+        line = log.rstrip().split('\n')[-1].split(' ')
+        if len(line) == 3 and line[0] == 'Score' and line[1] == '=':
+            return int(line[2])
     except: pass
 
 @ray.remote
