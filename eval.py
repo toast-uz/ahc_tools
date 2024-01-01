@@ -254,7 +254,7 @@ def compile(args):
     if (os.path.isfile(TESTEE) and
         os.stat(TESTEE_SOURCE).st_mtime < os.stat(TESTEE).st_mtime):
             return False
-    assert os.path.isfile(TESTEE_COMPILE)
+    assert os.path.isfile(TESTEE)
     cp = subprocess.run(TESTEE_COMPILE, shell=True)
     if cp.returncode != 0:
         print(cp.stderr)
