@@ -248,11 +248,13 @@ def parser():
 
 # 提出プログラムのソースが更新されていたらコンパイルする
 def compile(args):
+    assert os.path.isfile(TESTEE_SOURCE)
     if TESTEE_COMPILE is None:
         return False
     if (os.path.isfile(TESTEE) and
         os.stat(TESTEE_SOURCE).st_mtime < os.stat(TESTEE).st_mtime):
             return False
+    assert os.path.isfile(TESTEE_COMPILE)
     cp = subprocess.run(TESTEE_COMPILE, shell=True)
     if cp.returncode != 0:
         print(cp.stderr)
