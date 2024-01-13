@@ -1,7 +1,7 @@
 #!python
 
 # Tester driver for AtCoder Heuristic Contest
- 
+
 # Show help: python eval.py --help
 # Verified by Python3.11 on MacOS Sonoma
 # Dependency: pip install optuna ray
@@ -63,20 +63,23 @@ def get_score_from_log(log):
     except: pass
 
 @ray.remote
-def single_test(id, env=None, visible=False):
+def single_test(id, env=None, visible=False, timeout=TIMEOUT):
     start_time = time.time()
     cp = subprocess.Popen(f'exec {TESTER} {TESTEE} < tools/in/{id:04}.txt > tools/out/{id:04}.txt',
                           shell=True, env=env, stderr=subprocess.PIPE, text=True)
-    try:
-        _, stderr = cp.communicate(timeout=TIMEOUT)
-    except subprocess.TimeoutExpired as e:  # TLEなら強制終了
-        cp.kill()
-        _, stderr = cp.communicate()
-        stderr += f'\nTime limit exceeded ({TIMEOUT}s).'
+    stderr = []
+    while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
+        duration = time.time() - start_time
+        line = cp.stderr.readline().rstrip()
+        if not line and cp.poll() is not None: break
+        if visible:
+            print(f'{GREEN}{line}{NORMAL}')
+        if duration > timeout:
+            cp.kill()
+            stderr.append(f'Time limit exceeded ({timeout}s).')
+            break
     duration = time.time() - start_time
-    if visible:
-        for line in stderr.split('\n'):
-            print(f'{BLUE}{line}{NORMAL}')
+    stderr = '\n'.join(stderr)
     # スコアを取得する
     # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
     # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
@@ -167,7 +170,7 @@ class Objective:
         if self.debug: self.print_score_(results, duration_total)
         if self.standings: self.add_standings_(results)
         return -results.logscore_sum
-    
+
     # optunaの学習指示を環境変数に流し込む
     def set_env_(self, trial):
         env = os.environ.copy()
@@ -197,14 +200,14 @@ class Objective:
             print(f'{GREEN}', end='')
             print(*args, **kwargs)
             print(f'{NORMAL}', end='', flush=True)
-    
+
     # 結果を表示する
     def print_score_(self, results, duration_total):
         [self.dbg_(result) for result in results.items]
         self.dbg_(f'Total score: {results.score_sum} log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
         self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'      
             f' -> x{results.duration_sum / duration_total:.1f} faster than sequential.')
-        
+
     # 結果をahc_standingsに追加する
     def add_standings_(self, results):
         dir_ = f'tools/out/{self.test_ids[0]}_{self.test_ids[-1]}'
@@ -231,7 +234,7 @@ class Objective:
             for result in results.items:
                 f.write(f',{round(result.logscore * 100000000)}')
             f.write('\n')
-    
+
 # コマンドライン引数をパースする
 def parser():
     parser = argparse.ArgumentParser(description='Tester driver for AtCoder Heuristic Contest')
@@ -254,11 +257,11 @@ def compile(args):
     if (os.path.isfile(TESTEE) and
         os.stat(TESTEE_SOURCE).st_mtime < os.stat(TESTEE).st_mtime):
             return False
-    assert os.path.isfile(TESTEE)
     cp = subprocess.run(TESTEE_COMPILE, shell=True)
     if cp.returncode != 0:
         print(cp.stderr)
         exit(1)
+    assert os.path.isfile(TESTEE)
     Objective(args, dummy_test=True)()  # 初回実行は遅いので、計測前に1回だけダミー実行しておく
     return True
 
