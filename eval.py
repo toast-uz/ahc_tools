@@ -48,6 +48,7 @@ NORMAL = '\033[0m'
 
 # 環境変数で流し込むパラメータ
 # int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
+#   log: Trueの場合、setpは無視される
 # enque: enque_trialの値（複数あれば複数回実行）
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
@@ -176,12 +177,21 @@ class Objective:
     def set_env_(self, trial):
         env = os.environ.copy()
         if not trial: return env
-        for name, value in value.items():
-            step, log = value.get(2, None), value.get(3, False)
-            if name == 'int':
-                env[name] = str(trial.suggest_int(name, *value[:2], step=step, log=log))
-            elif name == 'float':
-                env[name] = str(trial.suggest_float(name, *value[:2], step=step, log=log))
+        for name, values in PARAMS.items():
+            for kind, value in values.items():
+                log = value[3] if len(value) > 3 else False
+                step = value[2] if len(value) > 2 and not log else None
+                if kind == 'int':
+                    if step is None:
+                        env[name] = str(trial.suggest_int(name, *value[:2], log=log))
+                    else:
+                        env[name] = str(trial.suggest_int(name, *value[:2], step=step))
+                elif kind == 'float':
+                    if step is None:
+                        env[name] = str(trial.suggest_float(name, *value[:2], log=log))
+                    else:
+                        env[name] = str(trial.suggest_float(name, *value[:2], step=step))
+                print(env)
         return env
 
     # 並列テストの結果を集計する（Optunaの枝刈りも行う）
