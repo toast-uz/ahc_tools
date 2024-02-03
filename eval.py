@@ -74,6 +74,7 @@ def single_test(id, env=None, visible=False, timeout=TIMEOUT):
         if not line and cp.poll() is not None: break
         if visible:
             print(f'{GREEN}{line}{NORMAL}')
+        stderr.append(line)
         if duration > timeout:
             cp.kill()
             stderr.append(f'Time limit exceeded ({timeout}s).')
