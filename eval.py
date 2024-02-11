@@ -112,7 +112,8 @@ class Result:
     def read_features_(self):
         try:
             with open(f'tools/in/{self.id:04}.txt') as f:
-                self.features = list(map(int, f.readline().rstrip().split()))
+                self.features = list(map(float, f.readline().rstrip().split()))
+                self.features = [int(x) if x.is_integer() else x for x in self.features]
         except: self.features = None
 
 class Results:
