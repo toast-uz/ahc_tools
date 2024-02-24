@@ -64,40 +64,44 @@ def get_score_from_log(log):
     except: pass
 
 @ray.remote
-def single_test(id, env=None, visible=False, timeout=TIMEOUT):
-    start_time = time.time()
-    cp = subprocess.Popen(f'exec {TESTER} {TESTEE} < tools/in/{id:04}.txt > tools/out/{id:04}.txt',
-                          shell=True, env=env, stderr=subprocess.PIPE, text=True)
-    stderr = []
-    while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
+class SingleTest:
+    def __init__(self, id):
+        self.id = id
+    def test(self, env=None, visible=False, timeout=TIMEOUT):
+        start_time = time.time()
+        cp = subprocess.Popen(f'exec {TESTER} {TESTEE} < tools/in/{self.id:04}.txt > tools/out/{self.id:04}.txt',
+                            shell=True, env=env, stderr=subprocess.PIPE, text=True)
+        stderr = []
+        while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
+            duration = time.time() - start_time
+            line = cp.stderr.readline().rstrip()
+            if not line and cp.poll() is not None: break
+            if visible:
+                print(f'{GREEN}{line}{NORMAL}')
+            stderr.append(line)
+            if duration > timeout:
+                cp.kill()
+                stderr.append(f'Time limit exceeded ({timeout}s).')
+                break
         duration = time.time() - start_time
-        line = cp.stderr.readline().rstrip()
-        if not line and cp.poll() is not None: break
-        if visible:
-            print(f'{GREEN}{line}{NORMAL}')
-        stderr.append(line)
-        if duration > timeout:
-            cp.kill()
-            stderr.append(f'Time limit exceeded ({timeout}s).')
-            break
-    duration = time.time() - start_time
-    stderr = '\n'.join(stderr)
-    # スコアを取得する
-    # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
-    # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
-    # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
-    score = get_score_from_log(stderr.rstrip())
-    if score is not None:
-        return id, (score, duration)
-    # スコアが無ければ、テスターとは別にスコアラーを使う
-    cp = subprocess.run(f'{SCORER} tools/in/{id:04}.txt tools/out/{id:04}.txt',
-        shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    score = get_score_from_log(cp.stderr.rstrip())
-    if score is None: score = get_score_from_log(cp.stdout.rstrip())
-    if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー
-        print(f'{RED}{cp.stderr.rstrip()}{NORMAL}')
-        exit()
-    return id, (score, duration)
+        stderr = '\n'.join(stderr)
+        # スコアを取得する
+        # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
+        # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
+        # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
+        score = get_score_from_log(stderr.rstrip())
+        if score is None:
+            # スコアが無ければ、テスターとは別にスコアラーを使う
+            cp = subprocess.run(f'{SCORER} tools/in/{self.id:04}.txt tools/out/{self.id:04}.txt',
+                shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            score = get_score_from_log(cp.stderr.rstrip())
+            if score is None: score = get_score_from_log(cp.stdout.rstrip())
+            if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー
+                print(f'{RED}{cp.stderr.rstrip()}{NORMAL}')
+                exit()
+        return self.id, (score, duration)
+    def __repr__(self):
+        return f'#{self.id:02}'
 
 class Result:
     def __init__(self, id, score, duration):
@@ -161,7 +165,8 @@ class Objective:
         workers, raw_results, results = [], {}, Results()
         for id in self.test_ids:
             self.dbg_(f'#{id} ', end='', flush=True)
-            worker = single_test.remote(id, env, visible=self.visible)
+            single_test = SingleTest.remote(id)
+            worker = single_test.test.remote(env, visible=self.visible)
             workers.append(worker)
             if len(workers) >= self.max_concurrent_workers:
                 finished, workers = ray.wait(workers, num_returns=1)
