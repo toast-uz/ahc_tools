@@ -34,10 +34,6 @@ def main():
         print('toolsディレクトリが無いので作成してください')
         exit(1)
     print('Found tools directory.')
-    # 必要なファイルやディレクトリを作成する
-    create_if_not_exists('.gitignore', 'file', GITIGNORE)
-    create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
-    create_if_not_exists('tools/out', 'dir')
     # toolsの古いビルドを削除する
     print('Removing old tools build...')
     os.chdir('tools')
@@ -51,6 +47,10 @@ def main():
     # ahc_standingsをダウンロードする
     print('Downloading ahc_standings ...')
     os.system(f'curl {AHC_STANDINGS_URL} -o tools/out/index.html')
+    # 必要なファイルやディレクトリを作成する
+    create_if_not_exists('.gitignore', 'file', GITIGNORE)
+    create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
+    create_if_not_exists('tools/out', 'dir')
 
 if __name__ == '__main__':
     main()
