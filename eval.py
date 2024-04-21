@@ -37,10 +37,14 @@ if LANGUAGE == 'Python':
 elif LANGUAGE == 'Rust':
     TESTEE_SOURCE = f'src/bin/a.rs'     # Rustの場合
     TESTEE = f'../target/release/{os.getcwd().split("/")[-1]}-a'       # Rustの場合
-    TESTEE_COMPILE = 'cargo build -r'   # Rustの場合
+    TESTEE_COMPILE = f'cargo build -r --bin {os.getcwd().split("/")[-1]}-a'   # Rustの場合
 
 SCORER = '../target/release/vis'      # スコア計算ツール
-TIMEOUT = 10
+if not os.path.isfile(SCORER):
+    SCORER = '../target/release/score'    # スコア計算ツール（候補その2）
+    if not os.path.isfile(SCORER):
+        SCORER = ''                       # 存在しない場合
+TIMEOUT = 30
 RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
@@ -65,23 +69,29 @@ def get_score_from_log(log):
 
 @ray.remote
 class SingleTest:
-    def __init__(self, id):
+    def __init__(self, id, dirs, testee, env=None, visible=False, timeout=TIMEOUT):
         self.id = id
-    def test(self, env=None, visible=False, timeout=TIMEOUT):
+        self.input = f'{dirs[0]}/{self.id:04}.txt'
+        self.output = f'{dirs[1]}/{self.id:04}.txt'
+        self.env = env
+        self.visible = visible
+        self.timeout = timeout
+        self.testee = testee
+    def test(self):
         start_time = time.time()
-        cp = subprocess.Popen(f'exec {TESTER} {TESTEE} < tools/in/{self.id:04}.txt > tools/out/{self.id:04}.txt',
-                            shell=True, env=env, stderr=subprocess.PIPE, text=True)
+        cp = subprocess.Popen(f'exec {TESTER} {self.testee} < {self.input} > {self.output}',
+                            shell=True, env=self.env, stderr=subprocess.PIPE, text=True)
         stderr = []
         while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
             duration = time.time() - start_time
             line = cp.stderr.readline().rstrip()
             if not line and cp.poll() is not None: break
-            if visible:
+            if self.visible:
                 print(f'{GREEN}{line}{NORMAL}')
             stderr.append(line)
-            if duration > timeout:
+            if duration > self.timeout:
                 cp.kill()
-                stderr.append(f'Time limit exceeded ({timeout}s).')
+                stderr.append(f'Time limit exceeded ({self.timeout}s).')
                 break
         duration = time.time() - start_time
         stderr = '\n'.join(stderr)
@@ -91,37 +101,43 @@ class SingleTest:
         # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
         score = get_score_from_log(stderr.rstrip())
         if score is None:
-            # スコアが無ければ、テスターとは別にスコアラーを使う
-            cp = subprocess.run(f'{SCORER} tools/in/{self.id:04}.txt tools/out/{self.id:04}.txt',
-                shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            score = get_score_from_log(cp.stderr.rstrip())
-            if score is None: score = get_score_from_log(cp.stdout.rstrip())
-            if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー
-                print(f'{RED}{cp.stderr.rstrip()}{NORMAL}')
-                exit()
+            if TESTER:
+                # スコアが無ければ、テスターとは別にスコアラーを使う
+                cp = subprocess.run(f'{SCORER} {self.input} {self.output}',
+                    shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                score = get_score_from_log(cp.stderr.rstrip())
+                if score is None: score = get_score_from_log(cp.stdout.rstrip())
+                if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー
+                    print(f'{RED}{cp.stderr.rstrip()}{NORMAL}')
+                    exit()
+            else:
+                score = 0
         return self.id, (score, duration)
     def __repr__(self):
         return f'#{self.id:02}'
 
 class Result:
-    def __init__(self, id, score, duration):
+    def __init__(self, id, dirs, score, duration):
         self.id = id
         self.score = score
         self.logscore = math.log10(1 + score)
         self.duration = duration
+        self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.read_features_()
+        print(self.input)
     def __repr__(self):
         features = ' '.join([f'{k}{v}' for k, v in zip(FEATURES, self.features)]) if self.features is not None else '[FEATURES error]'
         return f'#{self.id:02} {features} score: {self.score}, log: {self.logscore:.3f} time: {self.duration:.3f}s'
     def read_features_(self):
         try:
-            with open(f'tools/in/{self.id:04}.txt') as f:
+            with open(f'{self.input}') as f:
                 self.features = list(map(float, f.readline().rstrip().split()))
                 self.features = [int(x) if x.is_integer() else x for x in self.features]
         except: self.features = None
 
 class Results:
-    def __init__(self):
+    def __init__(self, dirs):
+        self.dirs = dirs
         self.items = []
         self.score_sum = 0
         self.logscore_sum = 0
@@ -139,6 +155,8 @@ class Results:
 class Objective:
     # コマンドライン引数をもとに、テスト動作のオプションを設定する
     def __init__(self, args, dummy_test=False):
+        self.dirs = args.dir
+        self.testee = '-'.join(TESTEE.split('-')[:-1] + [TESTEE.split('-')[-1].replace('a', args.testee)])
         if dummy_test:
             self.debug = not args.silent
             self.dbg_('Testing as a dummy because just compiled.')
@@ -162,11 +180,12 @@ class Objective:
         self.dbg_('Testing...', flush=True)
         env = self.set_env_(trial)
         start_time = time.time()
-        workers, raw_results, results = [], {}, Results()
+        workers, raw_results, results = [], {}, Results(self.dirs)
         for id in self.test_ids:
             self.dbg_(f'#{id} ', end='', flush=True)
-            single_test = SingleTest.remote(id)
-            worker = single_test.test.remote(env, visible=self.visible)
+            single_test = SingleTest.remote(id, self.dirs, self.testee,
+                env=env, visible=self.visible, timeout=TIMEOUT)
+            worker = single_test.test.remote()
             workers.append(worker)
             if len(workers) >= self.max_concurrent_workers:
                 finished, workers = ray.wait(workers, num_returns=1)
@@ -205,7 +224,7 @@ class Objective:
             raw_results[result[0]] = result[1]
         # 並列処理のためテストケースの終了順序は不定であるが、枝刈りできるようにテストケース順通りに集計する
         while len(results) < len(self.test_ids) and (id := self.test_ids[len(results)]) in raw_results:
-            results.append(Result(id, *raw_results[id]))
+            results.append(Result(id, results.dirs, *raw_results[id]))
             if not trial: continue
             trial.report(-results.logscore_sum, len(results)) # Optunaに結果を報告して枝刈りする
             if trial.should_prune():
@@ -263,26 +282,39 @@ def parser():
     parser.add_argument('-v', '--visible', help='visible test stderr.', action='store_true')
     parser.add_argument('-o', '--optuna', type=int,
         help='optuna n_trials, forced --silent', default=0)
+    parser.add_argument(
+        '--dir', nargs='*', type=str,
+        help="custom testcase diroctories as --dir tools/in tools/out",
+        default=['tools/in', 'tools/out'])
+    parser.add_argument('--testee', type=str,
+        help="the char in testee program name replaced from 'a'", default='a')
     return parser.parse_args()
 
 # 提出プログラムのソースが更新されていたらコンパイルする
 def compile(args):
-    assert os.path.isfile(TESTEE_SOURCE)
-    if TESTEE_COMPILE is None:
+    testee_source = '-'.join(TESTEE_SOURCE.split('-')[:-1] + [TESTEE_SOURCE.split('-')[-1].replace('a', args.testee)])
+    testee_compile = '-'.join(TESTEE_COMPILE.split('-')[:-1] + [TESTEE_COMPILE.split('-')[-1].replace('a', args.testee)])
+    testee = '-'.join(TESTEE.split('-')[:-1] + [TESTEE.split('-')[-1].replace('a', args.testee)])
+    assert os.path.isfile(testee_source), f'{RED}Source file {testee_source} not found.{NORMAL}'
+    if testee_compile is None:
         return False
-    if (os.path.isfile(TESTEE) and
-        os.stat(TESTEE_SOURCE).st_mtime < os.stat(TESTEE).st_mtime):
+    if (os.path.isfile(testee) and
+        os.stat(testee_source).st_mtime < os.stat(testee).st_mtime):
             return False
-    cp = subprocess.run(TESTEE_COMPILE, shell=True)
+    cp = subprocess.run(testee_compile, shell=True)
     if cp.returncode != 0:
         print(cp.stderr)
         exit(1)
-    assert os.path.isfile(TESTEE)
+    assert os.path.isfile(testee)
     Objective(args, dummy_test=True)()  # 初回実行は遅いので、計測前に1回だけダミー実行しておく
     return True
 
 def main():
     args = parser()
+    for dir_ in args.dir:
+        if not os.path.isdir(dir_):
+            print(f'{RED}Directory {dir_} not found.{NORMAL}')
+            exit(1)
     ray.init(configure_logging=False)
     compile(args)
     if args.optuna == 0:    # Optunaを使わないなら、通常のテストを実施して終了する
