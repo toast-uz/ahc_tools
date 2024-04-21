@@ -4,6 +4,7 @@
 # 冪等性あり（複数回実行してもよい）
 
 import os
+import glob
 
 GITIGNORE = '''testcases/
 tools/
@@ -21,7 +22,7 @@ def create_if_not_exists(path, type_='file', content=''):
     if type_ == 'file' and os.path.isfile(path) or type_ == 'dir' and os.path.isdir(path):
         print(f'{path} already exists.')
         return
-    print(f'Creating {type_} at {path} ...')
+    print(f'Creating {type_} as {path} ...')
     if type_ == 'file':
         with open(path, 'w') as f:
             f.write(content)
@@ -34,6 +35,10 @@ def main():
         print('toolsディレクトリが無いので作成してください')
         exit(1)
     print('Found tools directory.')
+    # rust-toolchainを削除する
+    if os.path.isfile('rust-toolchain'):
+        print('Removing old rust-toolchain...')
+        os.remove('rust-toolchain')
     # toolsの古いビルドを削除する
     print('Removing old tools build...')
     os.chdir('tools')
@@ -50,7 +55,8 @@ def main():
     # 必要なファイルやディレクトリを作成する
     create_if_not_exists('.gitignore', 'file', GITIGNORE)
     create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
-    create_if_not_exists('tools/out', 'dir')
+    for dir_ in sorted(glob.glob('tools/in*')):
+        create_if_not_exists(dir_.replace('in', 'out'), 'dir')
 
 if __name__ == '__main__':
     main()
