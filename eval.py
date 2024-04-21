@@ -23,7 +23,7 @@ import optuna
 
 # 条件にあわせて以下のみ変更する
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
-FEATURES = ['N', 'M', 'K']  # 特徴量
+FEATURES = ['N', 'M', 'ε', 'δ']  # 特徴量
 
 # 以下は設定変更不要なはす
 TESTER = '../target/release/tester'   # インタラクティブの場合
@@ -124,7 +124,6 @@ class Result:
         self.duration = duration
         self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.read_features_()
-        print(self.input)
     def __repr__(self):
         features = ' '.join([f'{k}{v}' for k, v in zip(FEATURES, self.features)]) if self.features is not None else '[FEATURES error]'
         return f'#{self.id:02} {features} score: {self.score}, log: {self.logscore:.3f} time: {self.duration:.3f}s'
