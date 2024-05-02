@@ -15,6 +15,7 @@
 import ray
 import subprocess
 from multiprocessing import cpu_count
+from dataclasses import dataclass, field
 import time
 import math
 import os
@@ -134,14 +135,15 @@ class Result:
                 self.features = [int(x) if x.is_integer() else x for x in self.features]
         except: self.features = None
 
+@dataclass
 class Results:
-    def __init__(self, dirs):
-        self.dirs = dirs
-        self.items = []
-        self.score_sum = 0
-        self.logscore_sum = 0
-        self.duration_sum = 0
-        self.duration_max = 0
+    dirs: list
+    items: list = field(default_factory=list)
+    score_sum: int = 0
+    logscore_sum: float = 0
+    duration_sum: float = 0
+    duration_max: float = 0
+
     def __len__(self):
         return len(self.items)
     def append(self, result):
@@ -179,7 +181,7 @@ class Objective:
         self.dbg_('Testing...', flush=True)
         env = self.set_env_(trial)
         start_time = time.time()
-        workers, raw_results, results = [], {}, Results(self.dirs)
+        workers, raw_results, results = [], {}, Results(dirs=self.dirs)
         for id in self.test_ids:
             self.dbg_(f'#{id} ', end='', flush=True)
             single_test = SingleTest.remote(id, self.dirs, self.testee,
