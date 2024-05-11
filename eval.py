@@ -36,9 +36,10 @@ if LANGUAGE == 'Python':
     TESTEE = f'pypy3 {TESTEE_SOURCE}'      # Pythonの場合
     TESTEE_COMPILE = None                 # Pythonの場合
 elif LANGUAGE == 'Rust':
-    TESTEE_SOURCE = f'src/bin/a.rs'     # Rustの場合
-    TESTEE = f'../target/release/{os.getcwd().split("/")[-1]}-a'       # Rustの場合
-    TESTEE_COMPILE = f'cargo build -r --bin {os.getcwd().split("/")[-1]}-a'   # Rustの場合
+    TESTEE_NAME = 'a'
+    TESTEE_SOURCE = f'src/bin/{TESTEE_NAME}.rs'     # Rustの場合
+    TESTEE = f'../target/release/{os.getcwd().split("/")[-1]}-{TESTEE_NAME}'       # Rustの場合
+    TESTEE_COMPILE = f'cargo build -r --bin {os.getcwd().split("/")[-1]}-{TESTEE_NAME}'   # Rustの場合
 
 SCORER = '../target/release/vis'      # スコア計算ツール
 if not os.path.isfile(SCORER):
