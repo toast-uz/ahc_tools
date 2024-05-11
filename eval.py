@@ -291,8 +291,8 @@ def parser():
         '--dir', nargs='*', type=str,
         help="custom testcase diroctories as --dir tools/in tools/out",
         default=['tools/in', 'tools/out'])
-    parser.add_argument('--testee', type=str,
-        help="the char in testee program name replaced from 'a'", default='a')
+    parser.add_argument('--bin', type=str,
+        help="the char in bin name replaced from 'a'", default='a')
     return parser.parse_args()
 
 # 提出プログラムのソースが更新されていたらコンパイルする
