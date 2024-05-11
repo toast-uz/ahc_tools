@@ -108,9 +108,12 @@ class SingleTest:
                     shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 score = get_score_from_log(cp.stderr.rstrip())
                 if score is None: score = get_score_from_log(cp.stdout.rstrip())
-                if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー
-                    print(f'{RED}{cp.stderr.rstrip()}{NORMAL}')
-                    exit()
+                if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー表示
+                    for line in cp.stderr.rstrip().split('\n'):
+                        print(f'{RED}{line}{NORMAL}')
+                    for line in cp.stdout.rstrip().split('\n'):
+                        print(f'{RED}{line}{NORMAL}')
+                    score = 0
             else:
                 score = 0
         return self.id, (score, duration)
