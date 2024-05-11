@@ -102,7 +102,7 @@ class SingleTest:
         # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
         score = get_score_from_log(stderr.rstrip())
         if score is None:
-            if TESTER:
+            if SCORER:
                 # スコアが無ければ、テスターとは別にスコアラーを使う
                 cp = subprocess.run(f'{SCORER} {self.input} {self.output}',
                     shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
