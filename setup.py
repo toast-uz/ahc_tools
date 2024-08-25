@@ -49,14 +49,14 @@ def main():
     os.chdir('tools')
     os.system('cargo build --release')
     os.chdir('..')
-    # ahc_standingsをダウンロードする
-    print('Downloading ahc_standings ...')
-    os.system(f'curl {AHC_STANDINGS_URL} -o tools/out/index.html')
     # 必要なファイルやディレクトリを作成する
     create_if_not_exists('.gitignore', 'file', GITIGNORE)
     create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
     for dir_ in sorted(glob.glob('tools/in*')):
         create_if_not_exists(dir_.replace('in', 'out'), 'dir')
+    # ahc_standingsをダウンロードする
+    print('Downloading ahc_standings ...')
+    os.system(f'curl {AHC_STANDINGS_URL} -o tools/out/index.html')
 
 if __name__ == '__main__':
     main()
