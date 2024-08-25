@@ -24,7 +24,7 @@ import optuna
 
 # 条件にあわせて以下のみ変更する
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
-FEATURES = ['N', 'M', 'ε', 'δ']  # 特徴量
+FEATURES = ['N', 'M', 'T', 'LA', 'LB']  # 特徴量
 
 # 以下は設定変更不要なはす
 TESTER = '../target/release/tester'   # インタラクティブの場合
@@ -244,8 +244,8 @@ class Objective:
     # 結果を表示する
     def print_score_(self, results, duration_total):
         [self.dbg_(result) for result in results.items]
-        self.dbg_(f'Total score: {results.score_sum} log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
-        self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'      
+        self.dbg_(f'Total score: {results.score_sum} (av. {int(results.score_sum / len(results.items))}) log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
+        self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'
             f' -> x{results.duration_sum / duration_total:.1f} faster than sequential.')
 
     # 結果をahc_standingsに追加する
@@ -291,7 +291,7 @@ def parser():
         '--dir', nargs='*', type=str,
         help="custom testcase diroctories as --dir tools/in tools/out",
         default=['tools/in', 'tools/out'])
-    parser.add_argument('--bin', type=str,
+    parser.add_argument('--testee', type=str,
         help="the char in bin name replaced from 'a'", default='a')
     return parser.parse_args()
 
