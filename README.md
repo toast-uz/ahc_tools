@@ -121,14 +121,16 @@ http://127.0.0.1:8000/index.html?contest=0_49
 
 #### 最適化例C. ハイパーパラメータの最適化
 
-以下にて、テスト0-999の実行を1試行として、Optunaで1000回試行してハイパーパラメータを最適化することができます。
+Optunaでハイパーパラメータを最適化することができます。
 
 事前に、ソースの以下の箇所を修正して、Optunaで最適化するハイパーパラメータをセットします。ハイパーパラメータは環境変数として実行プログラムに流し込まれますので、予め、実行プログラム側で環境変数を読み取って、ハイパーパラメータをセットするように作り込んでおく必要があります。
 
 ```
 # 環境変数で流し込むパラメータ
-# int: suugest_intの係数、float: suggest_floatの係数
+# int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
+#   log: Trueの場合、setpは無視される
 # enque: enque_trialの値（複数あれば複数回実行）
+DIRECTION = 'maximize'  # 'maximize' or 'minimize'
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
     'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
@@ -141,8 +143,10 @@ PARAMS = {
 
 > `enque_trial`とは、Optunaの試行において、固定値をセットするメソッドです。過去の最適値をセットすることで、新たな試行において最適値の周辺の探索機会が増え、さらなる最適値を見つけやすくなります。
 
+> DIRECTIONの設定を変えることで、最小値が良いのか、最大値が良いのかを、切り替えることがてきます。
 
-実行は以下にようにして、`-o`オプションにOptunaの試行回数を設定します。
+
+実行は以下にようにして、`-o`オプションにOptunaの試行回数を設定します。テスト0-999の実行を1試行として、Optunaで1000回試行する例です。
 
 `python eval.py -s 0 999 -o 1000`
 
@@ -176,7 +180,7 @@ pub mod os_env {
     pub fn get<T: std::str::FromStr>(name: &str) -> Option<T> {
         let name = format!("{}{}", PREFIX, name.to_uppercase());
         std::env::var(name).ok()?.parse().ok()
-    }    
+    }
 }
 
 ```

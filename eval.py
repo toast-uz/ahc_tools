@@ -24,7 +24,7 @@ import optuna
 
 # 条件にあわせて以下のみ変更する
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
-FEATURES = ['N', 'M', 'T', 'LA', 'LB']  # 特徴量
+FEATURES = ['N', 'M', 'T']  # 特徴量
 
 # 以下は設定変更不要なはす
 TESTER = '../target/release/tester'   # インタラクティブの場合
@@ -47,6 +47,7 @@ if not os.path.isfile(SCORER):
     if not os.path.isfile(SCORER):
         SCORER = ''                       # 存在しない場合
 TIMEOUT = 30
+SCORE_RE = 0
 RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
@@ -56,6 +57,7 @@ NORMAL = '\033[0m'
 # int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
 #   log: Trueの場合、setpは無視される
 # enque: enque_trialの値（複数あれば複数回実行）
+DIRECTION = 'maximize'  # 'maximize' or 'minimize'
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
     'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
@@ -114,9 +116,9 @@ class SingleTest:
                         print(f'{RED}{line}{NORMAL}')
                     for line in cp.stdout.rstrip().split('\n'):
                         print(f'{RED}{line}{NORMAL}')
-                    score = 0
+                    score = SCORE_RE
             else:
-                score = 0
+                score = SCORE_RE
         return self.id, (score, duration)
     def __repr__(self):
         return f'#{self.id:02}'
@@ -201,7 +203,7 @@ class Objective:
         duration_total = time.time() - start_time
         if self.debug: self.print_score_(results, duration_total)
         if self.standings: self.add_standings_(results)
-        return -results.logscore_sum
+        return results.logscore_sum
 
     # optunaの学習指示を環境変数に流し込む
     def set_env_(self, trial):
@@ -231,7 +233,7 @@ class Objective:
         while len(results) < len(self.test_ids) and (id := self.test_ids[len(results)]) in raw_results:
             results.append(Result(id, results.dirs, *raw_results[id]))
             if not trial: continue
-            trial.report(-results.logscore_sum, len(results)) # Optunaに結果を報告して枝刈りする
+            trial.report(results.logscore_sum, len(results)) # Optunaに結果を報告して枝刈りする
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
@@ -328,6 +330,7 @@ def main():
     # Optuna studyの生成
     pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=50)
     study = optuna.create_study(
+        direction=DIRECTION,
         pruner=pruner,
         study_name=f'{os.getcwd().split("/")[-1]}-{time.strftime("%Y%m%d-%H%M%S")}',
         storage=f'sqlite:///./tools/out/optuna.db', load_if_exists=True)
