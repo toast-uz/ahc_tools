@@ -17,14 +17,25 @@ import subprocess
 from multiprocessing import cpu_count
 from dataclasses import dataclass, field
 import time
+import datetime
 import math
 import os
 import argparse
 import optuna
 
-# 条件にあわせて以下のみ変更する
+# 条件にあわせて以下を変更する（通常テスト用）
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
 FEATURES = ['N', 'M', 'T']  # 特徴量
+
+# 条件にあわせて以下を変更する（Optuna用）
+# int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
+# log: Trueの場合、setpは無視される
+# enque: enque_trialの値（複数あれば複数回実行）
+DIRECTION = 'maximize'  # 'maximize' or 'minimize'
+PARAMS = {
+    'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
+    'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
+}
 
 # 以下は設定変更不要なはす
 TESTER = '../target/release/tester'   # インタラクティブの場合
@@ -52,16 +63,6 @@ RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
-
-# 環境変数で流し込むパラメータ
-# int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
-#   log: Trueの場合、setpは無視される
-# enque: enque_trialの値（複数あれば複数回実行）
-DIRECTION = 'maximize'  # 'maximize' or 'minimize'
-PARAMS = {
-    'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
-    'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
-}
 
 # ログの最後の行から Score = 数字 を探して、スコアを取得する
 def get_score_from_log(log):
@@ -317,6 +318,7 @@ def compile(args):
     return True
 
 def main():
+    print(f'{datetime.datetime.now()}')
     args = parser()
     for dir_ in args.dir:
         if not os.path.isdir(dir_):
