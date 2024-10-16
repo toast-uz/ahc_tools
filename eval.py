@@ -58,7 +58,7 @@ if not os.path.isfile(SCORER):
     if not os.path.isfile(SCORER):
         SCORER = ''                       # 存在しない場合
 TIMEOUT = 30
-SCORE_RE = 0
+SCORE_RE = 0 if DIRECTION == 'maximize' else 10**9
 RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
