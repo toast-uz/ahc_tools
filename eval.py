@@ -301,7 +301,7 @@ def parser():
 # 提出プログラムのソースが更新されていたらコンパイルする
 def compile(args):
     testee_source = '-'.join(TESTEE_SOURCE.split('-')[:-1] + [TESTEE_SOURCE.split('-')[-1].replace('a', args.testee)])
-    testee_compile = '-'.join(TESTEE_COMPILE.split('-')[:-1] + [TESTEE_COMPILE.split('-')[-1].replace('a', args.testee)])
+    testee_compile = '-'.join(TESTEE_COMPILE.split('-')[:-1] + [TESTEE_COMPILE.split('-')[-1].replace('a', args.testee)]) if TESTEE_COMPILE else None
     testee = '-'.join(TESTEE.split('-')[:-1] + [TESTEE.split('-')[-1].replace('a', args.testee)])
     assert os.path.isfile(testee_source), f'{RED}Source file {testee_source} not found.{NORMAL}'
     if testee_compile is None:
