@@ -10,7 +10,7 @@
 # View optuna-db: optuna-dashboard sqlite:///tools/out/optuna.db
 #   url_example: http://127.0.0.1:8080/
 # ahc_standings: python -m http.server --directory tools/out 8000
-#   url_example: http://127.0.0.1:8000/index.html?contest=0_99
+#   url_example: http://127.0.0.1:8000/index.html?contest=0_49
 
 import ray
 import subprocess
