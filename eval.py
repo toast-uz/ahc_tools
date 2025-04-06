@@ -22,6 +22,7 @@ import math
 import os
 import argparse
 import optuna
+import optunahub
 
 # 条件にあわせて以下を変更する（通常テスト用）
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
@@ -334,6 +335,7 @@ def main():
     pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=50)
     study = optuna.create_study(
         direction=DIRECTION,
+        sampler=optunahub.load_module("samplers/auto_sampler").AutoSampler(),
         pruner=pruner,
         study_name=f'{os.getcwd().split("/")[-1]}-{time.strftime("%Y%m%d-%H%M%S")}',
         storage=f'sqlite:///./tools/out/optuna.db', load_if_exists=True)
