@@ -25,7 +25,7 @@ import optuna
 
 # 条件にあわせて以下を変更する（通常テスト用）
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
-FEATURES = ['N', 'M', 'T']  # 特徴量
+FEATURES = ['N', 'M', 'Q', 'L', 'W']  # 特徴量
 
 # 条件にあわせて以下を変更する（Optuna用）
 # int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
@@ -78,7 +78,8 @@ class SingleTest:
         self.id = id
         self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.output = f'{dirs[1]}/{self.id:04}.txt'
-        self.env = env
+        self.env = {} if env is None else env
+        self.env |= {'AHC_PARAMS_INPUT_DIR': dirs[0], 'AHC_PARAMS_OUTPUT_DIR': dirs[1]}
         self.visible = visible
         self.timeout = timeout
         self.testee = testee
