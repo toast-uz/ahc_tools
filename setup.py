@@ -51,7 +51,9 @@ def main():
     os.chdir('..')
     # 必要なファイルやディレクトリを作成する
     create_if_not_exists('.gitignore', 'file', GITIGNORE)
-    create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
+    # v1.70.0は古びたため、toolchainは作成しない
+    print('Not create rust-toolchain, because v1.70.0 is too old.')
+    #create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
     for dir_ in sorted(glob.glob('tools/in*')):
         create_if_not_exists(dir_.replace('in', 'out'), 'dir')
     # ahc_standingsをダウンロードする
