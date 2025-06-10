@@ -26,17 +26,20 @@ import optunahub
 
 # 条件にあわせて以下を変更する（通常テスト用）
 LANGUAGE = 'Rust'  # 'Python' or 'Rust'
-FEATURES = ['N', 'M', 'Q', 'L', 'W']  # 特徴量
+FEATURES = [None, 'K', None, 'T', 'D']  # 結果出力で表示される特徴量名（Noneは表示しない）
+# 実行プログラム側では 'Comment =' で始まるデバッグ出力をすることで、プログラム内で得られた特徴量を結果表示できる
 
 # 条件にあわせて以下を変更する（Optuna用）
 # int: suugest_intの係数、float: suggest_floatの係数（3番目はstep, 4番目はlog）
 # log: Trueの場合、setpは無視される
 # enque: enque_trialの値（複数あれば複数回実行）
-DIRECTION = 'maximize'  # 'maximize' or 'minimize'
+DIRECTION = 'minimize'  # 'maximize' or 'minimize'
 PARAMS = {
     'AHC_PARAMS_SAMPLE1': {'int': [0, 1000], 'enque': [500]},
     'AHC_PARAMS_SAMPLE2': {'float': [0.0, 1.0], 'enque': [0.5]},
 }
+# 実行プログラム側では 'AHC_PARAMS_' で始まる環境変数を読み込むことで、Optunaのパラメータを取得する
+
 
 # 以下は設定変更不要なはす
 TESTER = '../target/release/tester'   # インタラクティブの場合
@@ -65,13 +68,23 @@ GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
 
-# ログの最後の行から Score = 数字 を探して、スコアを取得する
-def get_score_from_log(log):
-    try:
-        line = log.rstrip().split('\n')[-1].split(' ')
-        if len(line) == 3 and line[0] == 'Score' and line[1] == '=':
-            return int(line[2])
-    except: pass
+# ログの最後の行から10行の間て Score = 数字 を探して、スコアを取得する
+def get_score_from_last_logs(log):
+    res = get_special_comment_from_last_logs(log, 'Score')
+    if res is None:
+        return None
+    score = int(res)
+    return score if score > 0 else SCORE_RE
+# 汎用バージョン
+def get_special_comment_from_last_logs(log, header, search_lines=10):
+    num_line = -1
+    while -num_line <= len(log) and num_line >= -search_lines:
+        try:
+            line = log.rstrip().split('\n')[num_line].split(' ')
+            if len(line) >= 3 and line[0] == header and line[1] == '=':
+                return ' '.join(line[2:])
+        except: pass
+        num_line -= 1
 
 @ray.remote
 class SingleTest:
@@ -106,14 +119,14 @@ class SingleTest:
         # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
         # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
         # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
-        score = get_score_from_log(stderr.rstrip())
+        score = get_score_from_last_logs(stderr.rstrip())
         if score is None:
             if SCORER:
                 # スコアが無ければ、テスターとは別にスコアラーを使う
                 cp = subprocess.run(f'{SCORER} {self.input} {self.output}',
                     shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                score = get_score_from_log(cp.stderr.rstrip())
-                if score is None: score = get_score_from_log(cp.stdout.rstrip())
+                score = get_score_from_last_logs(cp.stderr.rstrip())
+                if score is None: score = get_score_from_last_logs(cp.stdout.rstrip())
                 if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー表示
                     for line in cp.stderr.rstrip().split('\n'):
                         print(f'{RED}{line}{NORMAL}')
@@ -122,21 +135,31 @@ class SingleTest:
                     score = SCORE_RE
             else:
                 score = SCORE_RE
-        return self.id, (score, duration)
+        comment = get_special_comment_from_last_logs(stderr.rstrip(), 'Comment')
+        return self.id, (score, duration, comment)
     def __repr__(self):
         return f'#{self.id:02}'
 
 class Result:
-    def __init__(self, id, dirs, score, duration):
+    def __init__(self, id, dirs, score, duration, comment):
         self.id = id
         self.score = score
         self.logscore = math.log10(1 + score)
         self.duration = duration
         self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.read_features_()
+        self.comment = comment
     def __repr__(self):
-        features = ' '.join([f'{k}{v}' for k, v in zip(FEATURES, self.features)]) if self.features is not None else '[FEATURES error]'
-        return f'#{self.id:02} {features} score: {self.score}, log: {self.logscore:.3f} time: {self.duration:.3f}s'
+        if self.features is None:
+            features = '[FEATURES error]'
+        else:
+            features = []
+            for k, v in zip(FEATURES, self.features):
+                if k is not None:
+                    features.append(f'{k}{v}')
+            features = ' '.join(features)
+        comment = self.comment + ' ' if self.comment else ''
+        return f'#{self.id:02} {features} {comment}score={self.score} time={self.duration:.3f}s'
     def read_features_(self):
         try:
             with open(f'{self.input}') as f:
