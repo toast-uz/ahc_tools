@@ -34,40 +34,51 @@ def create_if_not_exists(path, type_='file', content=''):
         os.mkdir(path)
 
 def main():
-    # 問題をダウンロードする
     contest_name = get_contest_name()
+    # Cargo.tomlの[[bin]]セクションを確認して、コンテスト名を修正する
+    cargo_toml_path = 'Cargo.toml'
+    if not os.path.isfile(cargo_toml_path):
+        print(f'{cargo_toml_path} not found. Please run this script in the contest directory.')
+        exit(1)
+    with open(cargo_toml_path, 'r') as f:
+        content = f.readlines()
+    i = content.index('[[bin]]\n')
+    content[i + 1] = f'name = "{contest_name}-a"\n'
+    content[i + 2] = 'path = "src/bin/a.rs"\n'
+    with open(cargo_toml_path, 'w') as f:
+        f.write(''.join(content))
+    # 問題をダウンロードする
     print('Downloading problem ...')
     os.system(f'curl https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a -o problem.html')
-    # 問題を読み込んで.zipのファイルパスを取得する
-    if not os.path.isfile('problem.html'):
-        print('Problem file not found. Please check the contest name or the URL.')
-        exit(1)
-    with open('problem.html', 'r') as f:
-        content = f.read()
-    zip_path = None
-    for line in content.splitlines():
-        if 'href' in line and '.zip' in line:
-            zip_path = line.split('"')[1]
-            break
-    if not zip_path:
-        print('No zip file found in the problem page. Please check the contest name or the URL.')
-        exit(1)
-    print(f'Found zip file: {zip_path}')
-    # zipファイルをダウンロードする
-    os.system(f'curl {zip_path} -o downloaded_tools.zip')
-    # zipファイルを解凍する
-    if not os.path.isfile('downloaded_tools.zip'):
-        print('Testcases zip file not found. Please check the contest name or the URL.')
-        exit(1)
-    print('Unzipping testcases.zip ...')
-    os.system('unzip -o downloaded_tools.zip -d .')
-    # ダウンロードしたzipファイルを削除する
-    os.remove('downloaded_tools.zip')
     # toolsディレクトリが無ければ作成を指示して終了する
     if not os.path.isdir('tools'):
-        print('toolsディレクトリが無いので作成してください')
-        exit(1)
-    print('Found tools directory.')
+        # 問題を読み込んで.zipのファイルパスを取得する
+        if not os.path.isfile('problem.html'):
+            print('Problem file not found. Please check the contest name or the URL.')
+            exit(1)
+        with open('problem.html', 'r') as f:
+            content = f.read()
+        zip_path = None
+        for line in content.splitlines():
+            if 'href' in line and '.zip' in line:
+                zip_path = line.split('"')[1]
+                break
+        if not zip_path:
+            print('No zip file found in the problem page. Please check the contest name or the URL.')
+            exit(1)
+        print(f'Found zip file: {zip_path}')
+        # zipファイルをダウンロードする
+        os.system(f'curl {zip_path} -o downloaded_tools.zip')
+        # zipファイルを解凍する
+        if not os.path.isfile('downloaded_tools.zip'):
+            print('Testcases zip file not found. Please check the contest name or the URL.')
+            exit(1)
+        print('Unzipping testcases.zip ...')
+        os.system('unzip -o downloaded_tools.zip -d .')
+        # ダウンロードしたzipファイルを削除する
+        os.remove('downloaded_tools.zip')
+    else:
+        print('Tools directory already exists. Skipping download.')
     # rust-toolchainを削除する
     if os.path.isfile('rust-toolchain'):
         print('Removing old rust-toolchain...')
@@ -92,6 +103,9 @@ def main():
     # ahc_standingsをダウンロードする
     print('Downloading ahc_standings ...')
     os.system(f'curl {AHC_STANDINGS_URL} -o tools/out/index.html')
+    # vscodeを起動する
+    print('Opening VSCode...')
+    os.system('code .')
 
 if __name__ == '__main__':
     main()
