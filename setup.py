@@ -3,6 +3,8 @@
 # Setup script for the tester driver
 # 冪等性あり（複数回実行してもよい）
 
+import requests
+import re
 import os
 import glob
 
@@ -33,39 +35,33 @@ def create_if_not_exists(path, type_='file', content=''):
     elif type_ == 'dir':
         os.mkdir(path)
 
-def main():
+def find_zip_file_path(html):
+    """HTMLからzipファイルのパスを探す"""
+    pattern = r'href=["\'](https://[^"\']+\.zip)["\']'
+    match = re.search(pattern, html)
+    if match:
+        return match.group(1)
+    return None
+
+def download_probelm_and_tools():
     contest_name = get_contest_name()
-    # Cargo.tomlの[[bin]]セクションを確認して、コンテスト名を修正する
-    cargo_toml_path = 'Cargo.toml'
-    if not os.path.isfile(cargo_toml_path):
-        print(f'{cargo_toml_path} not found. Please run this script in the contest directory.')
-        exit(1)
-    with open(cargo_toml_path, 'r') as f:
-        content = f.readlines()
-    i = content.index('[[bin]]\n')
-    content[i + 1] = f'name = "{contest_name}-a"\n'
-    content[i + 2] = 'path = "src/bin/a.rs"\n'
-    with open(cargo_toml_path, 'w') as f:
-        f.write(''.join(content))
-    # 問題をダウンロードする
-    print('Downloading problem ...')
-    os.system(f'curl https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a -o problem.html')
-    # toolsディレクトリが無ければ作成を指示して終了する
-    if not os.path.isdir('tools'):
-        # 問題を読み込んで.zipのファイルパスを取得する
-        if not os.path.isfile('problem.html'):
-            print('Problem file not found. Please check the contest name or the URL.')
-            exit(1)
+    # problem.htmlがあれば、それを読み込む
+    zip_path = None
+    if os.path.isfile('problem.html'):
         with open('problem.html', 'r') as f:
-            content = f.read()
-        zip_path = None
-        for line in content.splitlines():
-            if 'href' in line and '.zip' in line:
-                zip_path = line.split('"')[1]
-                break
-        if not zip_path:
-            print('No zip file found in the problem page. Please check the contest name or the URL.')
-            exit(1)
+            html = f.read()
+        zip_path = find_zip_file_path(html)
+    if zip_path is None:
+        # problem.htmlが正しくない（zipファイルのパスが見つからない）場合は、AtCoderから問題をダウンロードする
+        print(f'Downloading problem {contest_name} ...')
+        html = requests.get(f'https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a').text
+        zip_path = find_zip_file_path(html)
+    if zip_path is None:
+        # zipファイルのパスが見つからない場合は、手動でダウンロードするように指示して終了する
+        print('Please manually download the problem page from AtCoder to problem.html and run this script again.')
+        exit(1)
+    # toolsディレクトリが無ければzipファイルをダウンロードして解凍する
+    if not os.path.isdir('tools'):
         print(f'Found zip file: {zip_path}')
         # zipファイルをダウンロードする
         os.system(f'curl {zip_path} -o downloaded_tools.zip')
@@ -74,11 +70,48 @@ def main():
             print('Testcases zip file not found. Please check the contest name or the URL.')
             exit(1)
         print('Unzipping testcases.zip ...')
-        os.system('unzip -o downloaded_tools.zip -d .')
+        os.system('unzip -o downloaded_tools.zip -d . > /dev/null 2>&1')
         # ダウンロードしたzipファイルを削除する
         os.remove('downloaded_tools.zip')
     else:
-        print('Tools directory already exists. Skipping download.')
+        print(f'Tools directory already exists. Skipping download {zip_path}.')
+
+def split_sections(text: str, section_name: str):
+    """
+    text を [section_name] で分割し、
+    (before, current_block, after_next_section) を返す。
+    空の部分は '' を返す。
+    該当するセクションが無ければ (text, '', '') を返す。
+    [section_name] は行頭・行全体がそれのみの場合に限る。
+    """
+    m1 = re.search(rf'^\[{re.escape(section_name)}\]\s*$', text, re.MULTILINE)
+    if not m1:
+        return text, '', ''
+    # m1 の後に次の [xxxx] (同条件) を探す
+    after_m1 = text[m1.end():]
+    m2 = re.search(r'^\[.*?\]\s*$', after_m1, re.MULTILINE)
+    if m2:
+        pos2 = m1.end() + m2.start()
+    else:
+        pos2 = len(text)
+    before = text[:m1.start()].strip()
+    current = text[m1.start():pos2].strip()
+    after = text[pos2:].strip()
+    return before, current, after
+
+def main():
+    # 問題とツールをダウンロードする
+    download_probelm_and_tools()
+    # Cargo.tomlの[dependencies]セクションを、テンプレートからコピーする
+    cargo_toml_path = 'Cargo.toml'
+    cargo_toml_template_path = '../../rust_snippets/Cargo.toml'
+    with open(cargo_toml_path, 'r') as f:
+        before, _, after = split_sections(f.read(), 'dependencies')
+    with open(cargo_toml_template_path, 'r') as f:
+        _, current, _ = split_sections(f.read(), 'dependencies')
+    new_content = '\n\n'.join([before, current, after])
+    with open(cargo_toml_path, 'w') as f:
+        f.write(new_content)
     # rust-toolchainを削除する
     if os.path.isfile('rust-toolchain'):
         print('Removing old rust-toolchain...')
