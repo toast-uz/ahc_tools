@@ -56,6 +56,9 @@ def download_probelm_and_tools():
         print(f'Downloading problem {contest_name} ...')
         html = requests.get(f'https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a').text
         zip_path = find_zip_file_path(html)
+        # htmlを保存する
+        with open('problem.html', 'w') as f:
+            f.write(html)
     if zip_path is None:
         # zipファイルのパスが見つからない場合は、手動でダウンロードするように指示して終了する
         print('Please manually download the problem page from AtCoder to problem.html and run this script again.')
