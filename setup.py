@@ -105,13 +105,15 @@ def main():
     # Cargo.tomlの[dependencies]セクションを、テンプレートからコピーする
     cargo_toml_path = 'Cargo.toml'
     cargo_toml_template_path = '../../rust_snippets/Cargo.toml'
-    with open(cargo_toml_path, 'r') as f:
-        before, _, after = split_sections(f.read(), 'dependencies')
-    with open(cargo_toml_template_path, 'r') as f:
-        _, current, _ = split_sections(f.read(), 'dependencies')
-    new_content = '\n\n'.join([before, current, after])
-    with open(cargo_toml_path, 'w') as f:
-        f.write(new_content)
+    if os.path.isfile(cargo_toml_template_path):
+        print(f'Using Cargo.toml template from {cargo_toml_template_path}')
+        with open(cargo_toml_path, 'r') as f:
+            before, _, after = split_sections(f.read(), 'dependencies')
+        with open(cargo_toml_template_path, 'r') as f:
+            _, current, _ = split_sections(f.read(), 'dependencies')
+        new_content = '\n\n'.join([before, current, after])
+        with open(cargo_toml_path, 'w') as f:
+            f.write(new_content)
     # rust-toolchainを削除する
     if os.path.isfile('rust-toolchain'):
         print('Removing old rust-toolchain...')
