@@ -349,6 +349,7 @@ def main():
         if not os.path.isdir(dir_):
             print(f'{RED}Directory {dir_} not found.{NORMAL}')
             exit(1)
+    os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
     ray.init(configure_logging=False)
     compile(args)
     if args.optuna == 0:    # Optunaを使わないなら、通常のテストを実施して終了する
