@@ -7,6 +7,7 @@ import requests
 import re
 import os
 import glob
+import json
 
 GITIGNORE = '''testcases/
 tools/
@@ -19,6 +20,7 @@ vis.html
 '''
 RUST_TOOLCHAIN = '1.70.0'
 AHC_STANDINGS_URL = 'https://img.atcoder.jp/ahc_standings/index.html'
+COOKIE_JSONL_PATH = os.path.expanduser('~/Library/Application Support/cargo-compete/cookies.jsonl')
 
 def get_contest_name():
     """コンテスト名を取得する"""
@@ -43,8 +45,43 @@ def find_zip_file_path(html):
         return match.group(1)
     return None
 
+def load_atcoder_cookies():
+    """cargo-competeのcookies.jsonlからAtCoder用Cookieを読み込む"""
+    if not os.path.isfile(COOKIE_JSONL_PATH):
+        print(f'Cookie file not found: {COOKIE_JSONL_PATH}')
+        return {}
+    cookies = {}
+    with open(COOKIE_JSONL_PATH, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            domain = entry.get('domain', '')
+            if isinstance(domain, dict):
+                domain_text = ' '.join(str(v) for v in domain.values())
+            else:
+                domain_text = str(domain)
+            if 'atcoder.jp' not in domain_text:
+                continue
+            raw_cookie = entry.get('raw_cookie', '')
+            cookie_pair = raw_cookie.split(';', 1)[0].strip()
+            if '=' not in cookie_pair:
+                continue
+            name, value = cookie_pair.split('=', 1)
+            cookies[name] = value
+    if cookies:
+        print(f'Loaded {len(cookies)} AtCoder cookies from {COOKIE_JSONL_PATH}')
+    else:
+        print(f'No usable AtCoder cookies in {COOKIE_JSONL_PATH}')
+    return cookies
+
 def download_probelm_and_tools():
     contest_name = get_contest_name()
+    cookies = load_atcoder_cookies()
     # problem.htmlがあれば、それを読み込む
     zip_path = None
     if os.path.isfile('problem.html'):
@@ -54,7 +91,13 @@ def download_probelm_and_tools():
     if zip_path is None:
         # problem.htmlが正しくない（zipファイルのパスが見つからない）場合は、AtCoderから問題をダウンロードする
         print(f'Downloading problem {contest_name} ...')
-        html = requests.get(f'https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a').text
+        response = requests.get(
+            f'https://atcoder.jp/contests/{contest_name}/tasks/{contest_name}_a',
+            cookies=cookies,
+            timeout=20,
+        )
+        response.raise_for_status()
+        html = response.text
         zip_path = find_zip_file_path(html)
         # htmlを保存する
         with open('problem.html', 'w') as f:
@@ -67,7 +110,10 @@ def download_probelm_and_tools():
     if not os.path.isdir('tools'):
         print(f'Found zip file: {zip_path}')
         # zipファイルをダウンロードする
-        os.system(f'curl {zip_path} -o downloaded_tools.zip')
+        response = requests.get(zip_path, cookies=cookies, timeout=60)
+        response.raise_for_status()
+        with open('downloaded_tools.zip', 'wb') as f:
+            f.write(response.content)
         # zipファイルを解凍する
         if not os.path.isfile('downloaded_tools.zip'):
             print('Testcases zip file not found. Please check the contest name or the URL.')

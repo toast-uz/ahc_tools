@@ -1,9 +1,11 @@
 testcases/
 tools/
-srs/
 Cargo.lock
 .vscode/
-.pytest_cache/
-main.py
+eval.py
+setup.py
 rust-toolchain
 vis.html
+target/
+__pycache__/
+get_standings.py
