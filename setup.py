@@ -13,14 +13,20 @@ GITIGNORE = '''testcases/
 tools/
 Cargo.lock
 .vscode/
+.codex/
+__pycache__/
+AGENTS.md
 eval.py
 setup.py
+kill_ahc.zsh
+problem.html
 rust-toolchain
 vis.html
 '''
 RUST_TOOLCHAIN = '1.70.0'
 AHC_STANDINGS_URL = 'https://img.atcoder.jp/ahc_standings/index.html'
 COOKIE_JSONL_PATH = os.path.expanduser('~/Library/Application Support/cargo-compete/cookies.jsonl')
+AHC_TOOLS_PATH = '../ahc_tools/'
 
 def get_contest_name():
     """コンテスト名を取得する"""
@@ -36,6 +42,25 @@ def create_if_not_exists(path, type_='file', content=''):
             f.write(content)
     elif type_ == 'dir':
         os.mkdir(path)
+
+def copy_files_recursive(src_dir, dst_dir):
+    """src_dirの配下のサブディレクトリ/ファイルをdst_dirにコピーする。
+       サブディレクトリは再帰的にコピーし、dst_dirにディレクトリが存在しない場合は作成する。"""
+    for root, dirs, files in os.walk(src_dir):
+        rel_path = os.path.relpath(root, src_dir)
+        dst_root = os.path.join(dst_dir, rel_path) if rel_path != '.' else dst_dir
+        if not os.path.isdir(dst_root):
+            os.makedirs(dst_root)
+        for file in files:
+            src_file = os.path.join(root, file)
+            dst_file = os.path.join(dst_root, file)
+            if not os.path.isfile(dst_file):
+                print(f'Copying {src_file} to {dst_file} ...')
+                with open(src_file, 'rb') as f_src:
+                    with open(dst_file, 'wb') as f_dst:
+                        f_dst.write(f_src.read())
+            else:
+                print(f'{dst_file} already exists. Skipping copy.')
 
 def find_zip_file_path(html):
     """HTMLからzipファイルのパスを探す"""
@@ -179,6 +204,7 @@ def main():
     os.chdir('..')
     # 必要なファイルやディレクトリを作成する
     create_if_not_exists('.gitignore', 'file', GITIGNORE)
+    copy_files_recursive(AHC_TOOLS_PATH + '.codex', '.codex')
     # v1.70.0は古びたため、toolchainは作成しない
     print('Not create rust-toolchain, because v1.70.0 is too old.')
     #create_if_not_exists('rust-toolchain', 'file', RUST_TOOLCHAIN)
