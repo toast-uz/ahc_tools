@@ -1,5 +1,10 @@
 # AHC Codex Instructions (repo-local)
 
+## Scope / Priority
+- この `AGENTS.md` は「その時点で開いている AHC リポジトリ配下」に適用する。
+- 指示が衝突する場合は `FORBIDDEN > MUST > SHOULD` を優先する。
+- さらに上位（system / developer / user）指示がある場合はそちらを優先する。
+
 ## MUST (always)
 - 問題文は `problem.html` を最初に読む。
 - `Cargo.toml` の edition を確認し、`2024` でなければ `2024` に変更する。
@@ -26,37 +31,19 @@
 - メンバ変数・メソッド以外のグローバル変数・グローバル関数を作らない。
 - リモートへの `git push` は行わない。
 
-## TEST / EVAL
-- 単独ビルド検証: `/Users/toastuz/Develop/.venv/bin/python3 eval.py -s <seed> -v`
-- 再現性確認: `/Users/toastuz/Develop/.venv/bin/python3 eval.py -s 0 49`
-- 速度込み再現性確認: `/Users/toastuz/Develop/.venv/bin/python3 eval.py -s 0 49 --seq`
-- 単独 seed は変更影響が出るものに限定する。`seed=0` へ影響がある場合は `seed=0` を優先。
-- `eval.py -s 0 49` 実行後は、次アクション前に必ずユーザーへ確認する。
-  - 全修正を commit する
-  - 全修正を破棄する
-- commit を選んだ場合、commit message に `Total score` と `max time` を必ず含める。
-- 破棄はユーザー明示確認後のみ行う。
-
 ## Skill Split Policy
-- 本ファイルは「常時適用ルール」のみを保持し、詳細ワークフローは skills に分離する。
-- 依頼トリガー: 上位解推定の依頼は `ahc-snoop-top`、Optuna/パラメータ最適化の依頼は `ahc-optuna`、`eval.py` 実行と commit/破棄判断の依頼は `ahc-eval-git` を必ず呼ぶ。
-- 複合依頼では該当 skill をすべて呼び、実行順は `ahc-snoop-top -> ahc-optuna -> ahc-eval-git` を基本とする。
-- 次の詳細は skill 化推奨:
-  - `SNOOP TOP SOLUTION`（短期/長期の上位解推定手順）
-  - `HYPER PARAMS tuning with Optuna`（実装規約・試行手順・反映手順）
-  - `TEST & GIT WORKFLOW` の詳細運用（`-s 0 49` 後フロー含む）
-- このリポジトリの分離先:
+- 本ファイルは常時適用ルールのみを保持し、詳細手順は skills に分離する。
+- 上位解推定は `ahc-snoop-top`、Optuna/パラメータ最適化は `ahc-optuna`、`eval.py` 実行と commit/破棄判断は `ahc-eval-git` を呼ぶ。
+- 提出一連（再現性確認/提出/順位確認/commit）は `ahc_submit` を呼ぶ。
+- 複合依頼では該当 skill をすべて呼び、順序は `ahc-snoop-top -> ahc-optuna -> ahc-eval-git` を基本とする。
+- 詳細手順は以下に委譲する。
   - `.codex/skills/ahc-snoop-top/SKILL.md`
   - `.codex/skills/ahc-optuna/SKILL.md`
   - `.codex/skills/ahc-eval-git/SKILL.md`
-- skill 化後は、本ファイルには「いつその skill を使うか」だけ残す。
-
-## Optuna Rule (summary only)
-- Optuna 対応時は、`*_DEFAULT` と `Env::init` の `os_env::get("snake_case_key")` を必ずペアで実装する。
-- `eval.py` 側は `AHC_PARAMS_XXX`、`a.rs` 側は `xxx` キー（`AHC_PARAMS_` なし）で対応付ける。
-- 最適化対象は、実際に意思決定ロジックで参照されるパラメータのみに限定する。
-- 反映前後で `-s 0 -v` と `-s 0 49` を再実行して差分を確認する。
+  - `.codex/skills/ahc_submit/SKILL.md`
 
 ## AHC Tips
 - 強い貪欲解を目指すか、後段探索で改善しやすい初期解を目指すかを先に決める。
 - 自由度を固定しても可解なら、骨格を先に固めて残り自由度へ探索を集中する。
+- 斜めを考慮すると、非直感的だがブレークするーする場合がある。
+- 上位解と乖離している場合は、方針や自由度固定軸を見直す。

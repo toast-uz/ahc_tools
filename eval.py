@@ -62,19 +62,28 @@ if not os.path.isfile(SCORER):
     if not os.path.isfile(SCORER):
         SCORER = ''                       # 存在しない場合
 TIMEOUT = 30
+TLE_SECONDS = 2.0
 SCORE_RE = 0 if DIRECTION == 'maximize' else 10**9
 RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
 
-# ログの最後の行から10行の間て Score = 数字 を探して、スコアを取得する
-def get_score_from_last_logs(log):
+# ログの最後の行から10行の間で Score = 数字 を探して、生のスコアを取得する
+def get_raw_score_from_last_logs(log):
     res = get_special_comment_from_last_logs(log, 'Score')
     if res is None:
         return None
-    score = int(res)
-    return score if score > 0 else SCORE_RE
+    return int(res)
+
+# ログからスコアを取得する。0以下はWA扱いで既定値スコアに置き換える。
+def get_score_from_last_logs(log):
+    raw_score = get_raw_score_from_last_logs(log)
+    if raw_score is None:
+        return None, False
+    is_wa = raw_score <= 0
+    score = raw_score if raw_score > 0 else SCORE_RE
+    return score, is_wa
 # 汎用バージョン
 def get_special_comment_from_last_logs(log, header, search_lines=10):
     num_line = -1
@@ -119,33 +128,38 @@ class SingleTest:
         # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
         # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
         # なお、インタラクティブ型で提出プログラムでもスコア出力を実装している場合、稀に出力が混在するためうまく動作しない
-        score = get_score_from_last_logs(stderr.rstrip())
+        score, is_wa = get_score_from_last_logs(stderr.rstrip())
         if score is None:
             if SCORER:
                 # スコアが無ければ、テスターとは別にスコアラーを使う
                 cp = subprocess.run(f'{SCORER} {self.input} {self.output}',
                     shell=True, timeout=10, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                score = get_score_from_last_logs(cp.stderr.rstrip())
-                if score is None: score = get_score_from_last_logs(cp.stdout.rstrip())
+                score, is_wa = get_score_from_last_logs(cp.stderr.rstrip())
+                if score is None:
+                    score, is_wa = get_score_from_last_logs(cp.stdout.rstrip())
                 if score is None: # 標準出力と標準エラー出力の両方にスコアが無ければエラー表示
                     for line in cp.stderr.rstrip().split('\n'):
                         print(f'{RED}{line}{NORMAL}')
                     for line in cp.stdout.rstrip().split('\n'):
                         print(f'{RED}{line}{NORMAL}')
                     score = SCORE_RE
+                    is_wa = True
             else:
                 score = SCORE_RE
+                is_wa = True
         comment = get_special_comment_from_last_logs(stderr.rstrip(), 'Comment')
-        return self.id, (score, duration, comment)
+        return self.id, (score, duration, comment, is_wa)
     def __repr__(self):
         return f'#{self.id:02}'
 
 class Result:
-    def __init__(self, id, dirs, score, duration, comment):
+    def __init__(self, id, dirs, score, duration, comment, is_wa):
         self.id = id
         self.score = score
         self.logscore = math.log10(1 + score)
         self.duration = duration
+        self.is_wa = is_wa
+        self.is_tle = duration > TLE_SECONDS
         self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.read_features_()
         self.comment = comment
@@ -159,7 +173,14 @@ class Result:
                     features.append(f'{k}{v}')
             features = ' '.join(features)
         comment = self.comment + ' ' if self.comment else ''
-        return f'#{self.id:02} {features} {comment}score={self.score} time={self.duration:.3f}s'
+        score = 'WA' if self.is_wa else f'{self.score}'
+        statuses = []
+        if self.is_wa:
+            statuses.append('WA')
+        if self.is_tle:
+            statuses.append('TLE')
+        status_text = f' [{" ".join(statuses)}]' if statuses else ''
+        return f'#{self.id:02} {features} {comment}score={score} time={self.duration:.3f}s{status_text}'
     def read_features_(self):
         try:
             with open(f'{self.input}') as f:
@@ -175,6 +196,11 @@ class Results:
     logscore_sum: float = 0
     duration_sum: float = 0
     duration_max: float = 0
+    ac_count: int = 0
+    wa_count: int = 0
+    tle_count: int = 0
+    non_wa_score_sum: int = 0
+    non_wa_count: int = 0
 
     def __len__(self):
         return len(self.items)
@@ -184,6 +210,15 @@ class Results:
         self.logscore_sum += result.logscore
         self.duration_sum += result.duration
         self.duration_max = max(self.duration_max, result.duration)
+        if result.is_wa:
+            self.wa_count += 1
+        else:
+            self.non_wa_score_sum += result.score
+            self.non_wa_count += 1
+        if result.is_tle:
+            self.tle_count += 1
+        if not result.is_wa and not result.is_tle:
+            self.ac_count += 1
 
 class Objective:
     # コマンドライン引数をもとに、テスト動作のオプションを設定する
@@ -272,7 +307,11 @@ class Objective:
     # 結果を表示する
     def print_score_(self, results, duration_total):
         [self.dbg_(result) for result in results.items]
-        self.dbg_(f'Total score: {results.score_sum} (av. {int(results.score_sum / len(results.items))}) log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
+        total_score_text = 'WA' if results.wa_count > 0 else f'{results.score_sum}'
+        av_text = f'{int(results.non_wa_score_sum / results.non_wa_count)}' if results.non_wa_count > 0 else 'WA'
+        self.dbg_(f'Total score: {total_score_text} (av. {av_text})'
+            f' AC={results.ac_count} WA={results.wa_count} TLE={results.tle_count}'
+            f' log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
         self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'
             f' -> x{results.duration_sum / duration_total:.1f} faster than sequential.')
 
