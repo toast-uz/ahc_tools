@@ -20,6 +20,7 @@ import time
 import datetime
 import math
 import os
+import re
 import argparse
 import optuna
 import optunahub
@@ -68,6 +69,8 @@ RED = '\033[1m\033[31m'
 GREEN = '\033[1m\033[32m'
 BLUE = '\033[1m\033[34m'
 NORMAL = '\033[0m'
+TIME_L_PATH = '/usr/bin/time'
+USE_TIME_L = os.path.isfile(TIME_L_PATH)
 
 # ログの最後の行から10行の間で Score = 数字 を探して、生のスコアを取得する
 def get_raw_score_from_last_logs(log):
@@ -84,15 +87,26 @@ def get_score_from_last_logs(log):
     is_wa = raw_score <= 0
     score = raw_score if raw_score > 0 else SCORE_RE
     return score, is_wa
+
+def get_peak_memory_kib_from_logs(log):
+    # macOS /usr/bin/time -l emits:
+    # "<bytes>  maximum resident set size"
+    m = re.search(r'(\d+)\s+maximum resident set size', log)
+    if not m:
+        return None
+    rss_bytes = int(m.group(1))
+    return rss_bytes // 1024
 # 汎用バージョン
-def get_special_comment_from_last_logs(log, header, search_lines=10):
+def get_special_comment_from_last_logs(log, header, search_lines=300):
+    lines = log.rstrip().split('\n')
     num_line = -1
-    while -num_line <= len(log) and num_line >= -search_lines:
+    while -num_line <= len(lines) and num_line >= -search_lines:
         try:
-            line = log.rstrip().split('\n')[num_line].split(' ')
+            line = lines[num_line].split(' ')
             if len(line) >= 3 and line[0] == header and line[1] == '=':
                 return ' '.join(line[2:])
-        except: pass
+        except:
+            pass
         num_line -= 1
 
 @ray.remote
@@ -108,8 +122,22 @@ class SingleTest:
         self.testee = testee
     def test(self):
         start_time = time.time()
-        cp = subprocess.Popen(f'exec {TESTER} {self.testee} < {self.input} > {self.output}',
-                            shell=True, env=self.env, stderr=subprocess.PIPE, text=True)
+        run_cmd = f'exec {TESTER} {self.testee} < {self.input} > {self.output}'
+        if USE_TIME_L:
+            cp = subprocess.Popen(
+                [TIME_L_PATH, '-l', 'zsh', '-lc', run_cmd],
+                env=self.env,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        else:
+            cp = subprocess.Popen(
+                run_cmd,
+                shell=True,
+                env=self.env,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
         stderr = []
         while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
             duration = time.time() - start_time
@@ -124,6 +152,7 @@ class SingleTest:
                 break
         duration = time.time() - start_time
         stderr = '\n'.join(stderr)
+        memory_kib = get_peak_memory_kib_from_logs(stderr)
         # スコアを取得する
         # インタラクティブ型の場合は、テスターの標準エラー出力からスコアを取得することができるため、スコアラーを使わない
         # 非インタラクティブ型の場合でも、提出プログラムでスコア出力を実装していれば、スコアを取得できる
@@ -148,17 +177,18 @@ class SingleTest:
                 score = SCORE_RE
                 is_wa = True
         comment = get_special_comment_from_last_logs(stderr.rstrip(), 'Comment')
-        return self.id, (score, duration, comment, is_wa)
+        return self.id, (score, duration, comment, is_wa, memory_kib)
     def __repr__(self):
         return f'#{self.id:02}'
 
 class Result:
-    def __init__(self, id, dirs, score, duration, comment, is_wa):
+    def __init__(self, id, dirs, score, duration, comment, is_wa, memory_kib):
         self.id = id
         self.score = score
         self.logscore = math.log10(1 + score)
         self.duration = duration
         self.is_wa = is_wa
+        self.memory_kib = memory_kib
         self.is_tle = duration > TLE_SECONDS
         self.input = f'{dirs[0]}/{self.id:04}.txt'
         self.read_features_()
@@ -180,7 +210,8 @@ class Result:
         if self.is_tle:
             statuses.append('TLE')
         status_text = f' [{" ".join(statuses)}]' if statuses else ''
-        return f'#{self.id:02} {features} {comment}score={score} time={self.duration:.3f}s{status_text}'
+        mem_text = f' {self.memory_kib // 1024}MiB' if self.memory_kib is not None else ''
+        return f'#{self.id:02} {features} {comment}score={score} time={self.duration:.3f}s{mem_text}{status_text}'
     def read_features_(self):
         try:
             with open(f'{self.input}') as f:
@@ -196,6 +227,7 @@ class Results:
     logscore_sum: float = 0
     duration_sum: float = 0
     duration_max: float = 0
+    memory_max_kib: int = 0
     ac_count: int = 0
     wa_count: int = 0
     tle_count: int = 0
@@ -210,6 +242,8 @@ class Results:
         self.logscore_sum += result.logscore
         self.duration_sum += result.duration
         self.duration_max = max(self.duration_max, result.duration)
+        if result.memory_kib is not None:
+            self.memory_max_kib = max(self.memory_max_kib, result.memory_kib)
         if result.is_wa:
             self.wa_count += 1
         else:
@@ -311,7 +345,8 @@ class Objective:
         av_text = f'{int(results.non_wa_score_sum / results.non_wa_count)}' if results.non_wa_count > 0 else 'WA'
         self.dbg_(f'Total score: {total_score_text} (av. {av_text})'
             f' AC={results.ac_count} WA={results.wa_count} TLE={results.tle_count}'
-            f' log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s)')
+            f' log: {results.logscore_sum:.3f} (max time: {results.duration_max:.3f}s'
+            f', max mem: {results.memory_max_kib // 1024}MiB)')
         self.dbg_(f'Total time: {duration_total:.3f}s ({duration_total / len(results):.3f}s/test)'
             f' -> x{results.duration_sum / duration_total:.1f} faster than sequential.')
 
