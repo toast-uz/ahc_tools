@@ -236,6 +236,8 @@ class Results:
 
     def __len__(self):
         return len(self.items)
+    def logscore_mean(self):
+        return self.logscore_sum / len(self.items) if self.items else 0.0
     def append(self, result):
         self.items.append(result)
         self.score_sum += result.score
@@ -298,7 +300,7 @@ class Objective:
         duration_total = time.time() - start_time
         if self.debug: self.print_score_(results, duration_total)
         if self.standings: self.add_standings_(results)
-        return results.logscore_sum
+        return results.logscore_mean()
 
     # optunaの学習指示を環境変数に流し込む
     def set_env_(self, trial):
