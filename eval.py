@@ -300,7 +300,7 @@ class Objective:
         duration_total = time.time() - start_time
         if self.debug: self.print_score_(results, duration_total)
         if self.standings: self.add_standings_(results)
-        return results.logscore_mean()
+        return results.logscore_sum
 
     # optunaの学習指示を環境変数に流し込む
     def set_env_(self, trial):
@@ -330,7 +330,7 @@ class Objective:
         while len(results) < len(self.test_ids) and (id := self.test_ids[len(results)]) in raw_results:
             results.append(Result(id, results.dirs, *raw_results[id]))
             if not trial: continue
-            trial.report(results.logscore_sum, len(results)) # Optunaに結果を報告して枝刈りする
+            trial.report(results.logscore_mean(), len(results)) # Optunaに結果を報告して枝刈りする
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
