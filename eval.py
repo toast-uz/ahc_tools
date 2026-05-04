@@ -432,7 +432,8 @@ def main():
         Objective(args)()
         return
     # Optuna studyの生成
-    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=50)
+    n_warmup_steps = max(1, int((args.specified[-1] - args.specified[0] + 1) * 0.2))
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=n_warmup_steps)
     study = optuna.create_study(
         direction=DIRECTION,
         sampler=optunahub.load_module("samplers/auto_sampler").AutoSampler(),
