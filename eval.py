@@ -20,13 +20,15 @@ import time
 import datetime
 import math
 import os
+import sys
+import shlex
 import re
 import argparse
 import optuna
 import optunahub
 
 # 条件にあわせて以下を変更する（通常テスト用）
-LANGUAGE = 'Rust'  # 'Python' or 'Rust'
+LANGUAGE = 'Rust'  # 'Python' or 'Rust' or 'C++'
 FEATURES = [None, 'K', None, 'T', 'D']  # 結果出力で表示される特徴量名（Noneは表示しない）
 # 実行プログラム側では 'Comment =' で始まるデバッグ出力をすることで、プログラム内で得られた特徴量を結果表示できる
 
@@ -46,16 +48,29 @@ PARAMS = {
 TESTER = '../target/release/tester'   # インタラクティブの場合
 if not os.path.isfile(TESTER):
     TESTER = ''                       # 通常の場合
+IS_WINDOWS = os.name == "nt" or sys.platform.startswith("win")
+PROJECT_NAME = os.path.basename(os.getcwd())
 
 if LANGUAGE == 'Python':
     TESTEE_SOURCE = 'main.py'             # Pythonの場合
-    TESTEE = f'pypy3 {TESTEE_SOURCE}'      # Pythonの場合
+    TESTEE = f'{sys.executable} {TESTEE_SOURCE}'      # Pythonの場合
     TESTEE_COMPILE = None                 # Pythonの場合
 elif LANGUAGE == 'Rust':
     TESTEE_NAME = 'a'
-    TESTEE_SOURCE = f'src/bin/{TESTEE_NAME}.rs'     # Rustの場合
-    TESTEE = f'../target/release/{os.getcwd().split("/")[-1]}-{TESTEE_NAME}'       # Rustの場合
-    TESTEE_COMPILE = f'cargo build -r --bin {os.getcwd().split("/")[-1]}-{TESTEE_NAME}'   # Rustの場合
+    TESTEE_SOURCE = 'src/bin/{testee}.rs'     # Rustの場合
+    TESTEE = f'../target/release/{PROJECT_NAME}' + '-{testee}'       # Rustの場合
+    if IS_WINDOWS:
+        TESTEE += '.exe'
+    TESTEE_COMPILE = f'cargo build -r --bin {PROJECT_NAME}' + '-{testee}'   # Rustの場合
+elif LANGUAGE == 'C++':
+    TESTEE_NAME = 'a'
+    TESTEE_SOURCE = 'src/{testee}.cpp'         # C++の場合
+    TESTEE = f'./{TESTEE_NAME}'
+    if IS_WINDOWS:
+        TESTEE += '.exe'
+    TESTEE_COMPILE = f'g++ -std=c++20 -O2 -o {TESTEE} {TESTEE_SOURCE}'      # C++の場合
+else:
+    raise ValueError(f'Unsupported LANGUAGE={LANGUAGE}')
 
 SCORER = '../target/release/vis'      # スコア計算ツール
 if not os.path.isfile(SCORER):
@@ -122,34 +137,34 @@ class SingleTest:
         self.testee = testee
     def test(self):
         start_time = time.time()
-        run_cmd = f'exec {TESTER} {self.testee} < {self.input} > {self.output}'
-        if USE_TIME_L:
-            cp = subprocess.Popen(
-                [TIME_L_PATH, '-l', 'zsh', '-lc', run_cmd],
-                env=self.env,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+        testee_cmd = shlex.split(self.testee, posix=not IS_WINDOWS)
+        if TESTER:
+            run_cmd = shlex.split(TESTER, posix=not IS_WINDOWS) + testee_cmd
         else:
+            run_cmd = testee_cmd
+        if USE_TIME_L:
+            run_cmd = [TIME_L_PATH, '-l'] + run_cmd
+        with open(self.input) as stdin_file, open(self.output, 'w') as stdout_file:
             cp = subprocess.Popen(
                 run_cmd,
-                shell=True,
+                stdin=stdin_file,
+                stdout=stdout_file,
                 env=self.env,
                 stderr=subprocess.PIPE,
                 text=True,
             )
-        stderr = []
-        while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
-            duration = time.time() - start_time
-            line = cp.stderr.readline().rstrip()
-            if not line and cp.poll() is not None: break
-            if self.visible:
-                print(f'{GREEN}{line}{NORMAL}')
-            stderr.append(line)
-            if duration > self.timeout:
-                cp.kill()
-                stderr.append(f'Time limit exceeded ({self.timeout}s).')
-                break
+            stderr = []
+            while True: # visible=Trueの場合は、標準エラー出力をリアルタイムに表示する
+                duration = time.time() - start_time
+                line = cp.stderr.readline().rstrip()
+                if not line and cp.poll() is not None: break
+                if self.visible:
+                    print(f'{GREEN}{line}{NORMAL}')
+                stderr.append(line)
+                if duration > self.timeout:
+                    cp.kill()
+                    stderr.append(f'Time limit exceeded ({self.timeout}s).')
+                    break
         duration = time.time() - start_time
         stderr = '\n'.join(stderr)
         memory_kib = get_peak_memory_kib_from_logs(stderr)
@@ -401,9 +416,9 @@ def parser():
 
 # 提出プログラムのソースが更新されていたらコンパイルする
 def compile(args):
-    testee_source = '-'.join(TESTEE_SOURCE.split('-')[:-1] + [TESTEE_SOURCE.split('-')[-1].replace('a', args.testee)])
-    testee_compile = '-'.join(TESTEE_COMPILE.split('-')[:-1] + [TESTEE_COMPILE.split('-')[-1].replace('a', args.testee)]) if TESTEE_COMPILE else None
-    testee = '-'.join(TESTEE.split('-')[:-1] + [TESTEE.split('-')[-1].replace('a', args.testee)])
+    testee_source = resolve_testee_source(args)
+    testee_compile = resolve_testee_compile(args)
+    testee = resolve_testee(args)
     assert os.path.isfile(testee_source), f'{RED}Source file {testee_source} not found.{NORMAL}'
     if testee_compile is None:
         return False
@@ -417,6 +432,26 @@ def compile(args):
     assert os.path.isfile(testee)
     Objective(args, dummy_test=True)()  # 初回実行は遅いので、計測前に1回だけダミー実行しておく
     return True
+
+
+def resolve_testee_source(args):
+    if '{testee}' in TESTEE_SOURCE:
+        return TESTEE_SOURCE.format(testee=args.testee)
+    return TESTEE_SOURCE
+
+
+def resolve_testee_compile(args):
+    if TESTEE_COMPILE is None:
+        return None
+    if '{testee}' in TESTEE_COMPILE:
+        return TESTEE_COMPILE.format(testee=args.testee)
+    return TESTEE_COMPILE
+
+
+def resolve_testee(args):
+    if '{testee}' in TESTEE:
+        return TESTEE.format(testee=args.testee)
+    return TESTEE
 
 def main():
     print(f'{datetime.datetime.now()}')
