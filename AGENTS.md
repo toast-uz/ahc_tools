@@ -1,3 +1,15 @@
+I am currently participating in an AtCoder Heuristic Contest, and I will use this generative AI to assist in developing my solution.
+
+When using this generative AI, the "AtCoder Heuristic Contest Generative AI Usage Rules - Version 20250616" apply.
+
+https://info.atcoder.jp/entry/ahc-llm-rules-en
+
+Most importantly, after running the solution program, you must not modify or improve the solution, its approach, or its code based on the execution results unless the user gives a new explicit instruction to do so.
+
+You may run the solution program and report its execution results, logs, scores, or other observations. After reporting them, you must stop and wait for a new instruction from the user before making any improvement based on those results.
+
+Here, "solution program" refers to any program created or being created for the purpose of solving this contest problem, regardless of whether it was created by the user or by generative AI, and regardless of whether it is still in progress or already complete.
+
 # AHC Codex Instructions (repo-local)
 
 ## Scope / Priority
@@ -6,7 +18,7 @@
 - さらに上位（system / developer / user）指示がある場合はそちらを優先する。
 
 ## FORBIDDEN
-- `tools` 配下を変更しない。
+- `tools/src` と `tools/in` を変更しない。`tools/out` は評価結果の出力先として変更してよい。
 - メンバ変数・メソッド以外のグローバル変数・グローバル関数を作らない。
 - リモートへの `git push` は行わない。
 
@@ -14,6 +26,7 @@
 - 問題文は `problem.html` を最初に読む。
 - `Cargo.toml` の edition を確認し、`2024` でなければ `2024` に変更する。
 - 変更範囲は AHC 用。原則 `src/bin/a.rs` のみを最小差分で修正する。
+- 解答プログラムのコンパイル・ビルド・動作確認は、必ず `eval.py -s 0 -v` 経由で行う。`cargo build`、`cargo check`、`cargo run` などを直接実行して解答プログラムをコンパイル・動作確認しない。`eval.py` は解答ソースが実行ファイルより新しい場合に自動ビルドするため、別途リリースビルドを前提にしない。評価出力は既定の `tools/out` に保存してよい。
 - 必要な仕様確認は `tools/src/lib.rs` と `tools/srs/in/` を参照する。
 - Rust は 1.89.0 前提。利用クレートは `Cargo.toml` 記載済みのみ（必要なら uncomment）。
 - 乱数は `rand_xorshift` を使い、seed は固定して再現性を担保する。
@@ -56,3 +69,7 @@
 - モデル化の切替時は、方針ごとに同じログ項目（初期値・選択理由・終了値）を固定して残し、判断の再現性を担保する
 - 上位解と乖離している場合は、方針・骨格・自由度固定軸・近傍設計を見直す
 - グリッド問題は1次元Vecで管理する
+- 問題上の本質的な同値性（平行移動・回転・反転・相対的に同じ距離など）は商して探索空間から除く
+- 実行順序は全順序ではなく必要な因果関係だけを表す半順序として持つことで、SAを適用しやすくする
+- その他のTIPSは以下を参照する
+  - `.codex/skills/ahc-idea-generator/SKILL.md`

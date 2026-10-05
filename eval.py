@@ -29,7 +29,7 @@ import optunahub
 
 # 条件にあわせて以下を変更する（通常テスト用）
 LANGUAGE = 'Rust'  # 'Python' or 'Rust' or 'C++'
-FEATURES = [None, 'K', None, 'T', 'D']  # 結果出力で表示される特徴量名（Noneは表示しない）
+FEATURES = ['N', 'K']  # 結果出力で表示される特徴量名（Noneは表示しない）
 # 実行プログラム側では 'Comment =' で始まるデバッグ出力をすることで、プログラム内で得られた特徴量を結果表示できる
 
 # 条件にあわせて以下を変更する（Optuna用）
@@ -275,7 +275,7 @@ class Objective:
     # コマンドライン引数をもとに、テスト動作のオプションを設定する
     def __init__(self, args, dummy_test=False):
         self.dirs = args.dir
-        self.testee = '-'.join(TESTEE.split('-')[:-1] + [TESTEE.split('-')[-1].replace('a', args.testee)])
+        self.testee = resolve_testee(args)
         if dummy_test:
             self.debug = not args.silent
             self.dbg_('Testing as a dummy because just compiled.')
