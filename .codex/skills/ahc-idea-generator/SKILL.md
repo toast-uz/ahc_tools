@@ -1,546 +1,75 @@
-# AHC Idea Generator Skill
-
-## Purpose
-This skill is an idea dictionary for AtCoder Heuristic Contest (AHC) problem solving.
-It is NOT a catalog to mechanically enumerate algorithms. Use it to detect structural signals in a problem or an existing solver, then generate concrete alternative formulations, neighborhoods, repairs, and search strategies.
-
-## Core behavior
-When asked to solve or improve an AHC solver:
-1. Identify the current bottleneck: construction quality, search-space reachability, evaluator cost, feasibility, long-term dependency, congestion, ordering, allocation, uncertainty, or local optimum.
-2. Select 5-10 techniques whose `triggers` match the bottleneck.
-3. Include at least 2 non-obvious / reframing techniques, not only standard SA/beam/greedy.
-4. For each selected technique, instantiate it for THIS problem: define state, move, invariant, evaluator, and expected benefit.
-5. Prefer experiments that falsify an idea cheaply before large implementation.
-6. If an existing solver is supplied, distinguish changes to representation, neighborhood, evaluator, decoder, and search controller.
-7. Do not recommend a technique merely because it is famous. Explain the structural match.
-
-## Diagnostic questions
-Ask internally:
-- Can time be made part of the state?
-- Can the problem be solved backwards, or can an earlier decision be rewritten after seeing its consequences?
-- Can part of a solution be destroyed and rebuilt exactly or semi-exactly?
-- Is feasibility easier if construction and physical decoding are separated?
-- Can expensive global evaluation become local/differential?
-- Is the apparent decision variable the wrong representation?
-- Can we reserve future resources instead of resolving collisions afterwards?
-- Can a hard constraint be temporarily violated and repaired later?
-- Can a sequence be cut into windows and optimized exactly inside each window?
-- Can multiple weak representations/searches exchange elite solutions?
-- Is there hidden symmetry, periodicity, exchangeability, or sufficient statistics?
-- Can we optimize the bottleneck rather than the final score directly?
-
+---
+name: ahc-idea-generator
+description: 長期AHCを中心に、ユーザーが発散・行き詰まりの打開・方針の見直しを求めたとき、現在の考察や試行から突破口になる具体的なヒントを出す。問題を読んだ直後から実装後まで使い、採用された案の実験を支援する。
 ---
 
-# Technique Dictionary
+# AHC 発想生成
 
-## A. State-space reframing
+## 目的
 
-### A01 Time-expanded search / 時空間BFS
-**Triggers:** dynamic obstacles; collisions; waiting matters; same position has different value at different times.
-**Idea:** replace state `position` with `(position,time[,resources])` and search the time-expanded graph.
-**Try:** add WAIT edges; cap horizon; exploit periodicity with `time mod period`.
-**Failure modes:** state explosion; horizon too long; ignoring periodic compression.
-**Related:** future reservation, rolling horizon, CBS, dynamic programming.
+長期AHCの開発中に、ユーザーが次に考えたり試したりする価値のあるヒントを得る。ブレークスルーの候補は、得点を失う原因に対して、表現・分解・決定順序・評価・計算配分などを変える具体的な仮説として示す。小さな変更でも本当のボトルネックを解消するなら有力な候補になる。
 
-### A02 Reverse search / 逆向き探索
-**Triggers:** many starts and few goals; goal constraints are tighter; predecessor generation is easy.
-**Idea:** search from desired terminal states toward possible origins.
-**Try:** compute reverse distances/potentials once and use them in construction/evaluation.
-**Failure modes:** irreversible actions make predecessors huge or ambiguous.
-**Related:** bidirectional search, potentials, goal anchoring.
+問題文だけで上位解法を当てることや、珍しいアルゴリズムを出すことを目的にしない。効果は未検証の仮説として扱う。完成した解法にする前の、部分的な着想も提示してよい。
 
-### A03 Meet in the middle / 中間合流
-**Triggers:** long sequence with composable halves; exponential search depth; compact boundary state.
-**Idea:** enumerate/optimize prefix and suffix independently and join compatible boundary signatures.
-**Failure modes:** boundary signature is too large.
-**Related:** window DP, state compression.
+## 現在地をつかむ
 
-### A04 Sufficient-state compression / 十分統計化
-**Triggers:** history seems important but future depends only on aggregates; many states behave identically.
-**Idea:** replace full history with counts, masks, endpoints, loads, parity, last-use times, etc.
-**Prompt:** “What information from the past actually changes future legal moves or score?”
-**Related:** canonicalization, transposition tables.
+問題文を最初に読み、会話・現在の方針・必要なコード・共有された試行記録から、今回の発散に関係する範囲を把握する。ユーザーに全履歴を書き直させず、次を必要な分だけ拾う。
 
-### A05 Symmetry quotient / 対称性潰し
-**Triggers:** interchangeable agents/colors/groups; rotations/reflections; equivalent permutations.
-**Idea:** canonicalize equivalent states so search budget is spent only once.
-**Failure modes:** symmetry is broken by hidden future costs.
+- **目的と制約**：得点を決める量、合法性、入力の特徴、1実行の時間制限。
+- **現在の解法**：何を変数にし、何を固定し、どの順に決め、どう出力へ復元するか。
+- **既知と未確認**：困っている現象、効いた案・効かなかった案、その比較条件。観測事実と原因の推測を区別する。
+- **使える時間**：コンテストの残り時間、実装と検証の余力。実行時間制限とは分けて扱う。
 
-### A06 Representation inversion / 表現の反転
-**Triggers:** direct variables cause awkward constraints; decoder is complicated; local moves have global effects.
-**Idea:** optimize a latent representation (order, grouping, priorities, skeleton, assignments), then decode into physical actions.
-**Prompt:** “What representation makes validity automatic?”
-**Related:** indirect encoding, physical decoder, random keys.
+情報が少なければ問題構造から発想し、前提を短く添える。推薦を左右する不足情報だけ質問する。症状やコードがまだないことを、ヒント提示の開始条件にしない。
 
-### A07 Event-driven state / イベント駆動化
-**Triggers:** many turns do nothing structurally; only arrivals/departures/collisions matter.
-**Idea:** jump between meaningful events rather than simulating every tick.
-**Related:** discrete-event simulation, lazy simulation.
+## 得点を失う場所から仮説を作る
 
-### A08 Product-state search / 状態直積
-**Triggers:** two small interacting constraints each easy alone.
-**Idea:** search `(state_A,state_B)` explicitly instead of patching one constraint afterward.
-**Failure modes:** multiplicative state explosion.
+現状を1〜3文で整理し、どこを変えると得点へつながりそうかを考える。以下を全て埋める必要はない。
 
-## B. Temporal reasoning and “history editing”
+- 得点差を、未処理の需要・移動・固定費・待ち・衝突・復元時の損失など、問題固有の要因へ分ける。上界・下界や簡単な理想状態を置けるなら、残る改善余地を見積もる。
+- 「表現上よい解へ届かない」「届くが探索できない」「候補の評価・選別を誤る」「復元や修復で価値を失う」「1候補が高価」のどれが疑わしいかを見る。複数の原因が説明できるなら、小さく区別する観測を考える。
+- 問題の制約と、自分で固定した設計を分ける。位置・順序・状態に分けて2軸固定＋1軸最適化を考え、固定する側と動かす側も反転する。
+- 想定と逆の観測や、特定の入力だけで崩れる現象を手掛かりにする。平均スコアだけから原因を決めない。比較条件が違う結果や弱い試作から、解法の一系統全体を棄却しない。
 
-### B01 Retroactive modification / 過去改変
-**Triggers:** current failure was caused by a small earlier choice; solution is replayable; prefix can be reused.
-**Idea:** when a bad consequence appears at time `t`, identify a causal decision at `t-k`, alter it, then replay forward.
-**Implementation pattern:** checkpoint -> edit historical action -> replay suffix -> accept/reject.
-**Prompt:** “Instead of fixing the current state, which earlier decision would make this problem never occur?”
-**Failure modes:** replay cost; cascading changes; weak causal localization.
-**Related:** rollback, prefix checkpointing, suffix repair.
+問題を読んだ直後なら、複数の見方と小さな初手を示す。考察中なら未検討の前提・分解を、実装後なら共有された観測を説明できる変更を探す。上位スコアが分かっても、それだけで上位解法を断定しない。
 
-### B02 Delayed commitment / 遅延確定
-**Triggers:** early commitment destroys options; information/value becomes clearer later.
-**Idea:** leave assignments/order/route partially unresolved until necessary.
-**Representations:** candidate sets, placeholders, soft ownership, partial order.
-**Related:** lazy decoding, beam search.
+## 発散して、異なる候補を残す
 
-### B03 Future reservation / 未来予約
-**Triggers:** agents compete for cells/resources/time slots; collisions are expensive.
-**Idea:** reserve future occupancy/capacity before executing actions.
-**State:** reservation table `(resource,time)->owner/capacity`.
-**Related:** time-expanded BFS, prioritized planning.
+まず問題の構造から案を出し、次に[発想の補助資料](発想の補助資料.md)の関連する節で抜けを補う。アルゴリズム名は、問題の変数・制約への対応と適用条件を伴う実現手段として使う。
 
-### B04 Rolling horizon / 窓先読み
-**Triggers:** full-horizon optimization is impossible but short future matters.
-**Idea:** optimize next `H` steps, execute only first `k`, shift horizon, repeat.
-**Failure modes:** horizon boundary artifacts.
-**Related:** MPC, rollout, terminal potentials.
+- 現在の骨格を活かす案と、固定していた前提を外す案を比べる。停滞時は、表現・分解の変更も検討してから探索器の調整へ進む。
+- 解の座標系、遅延決定、集合・同値性、目標からの逆算、固定費の共有、再利用する操作、代理問題など、原因に関係する方向を選ぶ。資料の分類や既知の技法に収まらない案も残す。
+- 「この変更によって、何が新しく可能になるか」をつなぐ。必要なら、変更後の状態・一手・復元方法・支配的な計算量まで具体化する。高速化なら、増やせる探索量や使える強い部分問題まで示す。
+- 同じ状態表現・決定順序・復元方法で、温度や近傍だけが違う案は一系統へまとめる。異なる失敗原因に効く案や、異なる解の構造を生む案を残す。
+- 実装の安さだけで候補を選ばない。長期戦で時間に余裕があれば、異なる骨格の成立を小さく確かめる案も残す。時間が限られるほど、既存解法へ接続しやすく検証まで終えられる案を優先する。
+- 長期戦では、既に試した案との違いと、今なら試す価値がある理由を添える。棄却案の再提案には、前提・表現・予算など何が変わったかを示す。
 
-### B05 Checkpoint & replay / チェックポイント再生
-**Triggers:** simulations share long prefixes; local historical edits; expensive restart.
-**Idea:** snapshot selected states and replay only from nearest checkpoint.
-**Related:** retroactive modification, undo log.
+## ヒントとして返す
 
-### B06 Undo-log traversal / Undoログ
-**Triggers:** candidate states differ locally; copying state dominates runtime.
-**Idea:** record changed fields `(address,old,new)` and undo/reapply mutations rather than cloning full state.
-**Related:** differential beam search, rollback DSU.
+通常は有望な案を2〜4個、ユーザーが指定した粒度と数を優先して返す。弱い案で数を埋めない。各案には次を短く含める。
 
-### B07 Temporal coarse-to-fine / 時間粗密化
-**Triggers:** early planning needs global shape; late planning needs precise timing.
-**Idea:** plan in coarse time buckets, then refine critical intervals.
+1. **着想**：具体的に何を変えるか。現在の方法からの差があるなら示す。
+2. **効く筋道**：どの損失や制約に効くか。根拠となる事実と、まだ置いている仮定。
+3. **実現の入口**：状態・操作・分解やアルゴリズム候補。未完成の案なら、決まっている部分と不明な部分。
+4. **最小の確認**：手計算・小例・試作で何を見るか。成立を支持する観測と、見切る条件。
 
-## C. Construction
+最後に、最初に確かめる案と理由を示す。効果の余地、仮説への確信、判別までのコスト、残り時間を考慮する。根拠のない改善率や精密な採点表は作らない。診断が分かれる場合は、実装候補より先に原因を区別する確認を推薦してよい。
 
-### C01 Greedy with regret / 後悔値貪欲
-**Triggers:** assignment/scheduling; scarce options; plain greedy steals resources from constrained items.
-**Idea:** prioritize item whose best and second-best choices differ most.
+詳しく整理する場合だけ[発想生成テンプレート](発想生成テンプレート.md)を使う。毎回全欄を埋めたり、完成した探索器まで設計したりする必要はない。
 
-### C02 Randomized greedy / ランダム化貪欲
-**Triggers:** greedy is strong but brittle.
-**Idea:** choose probabilistically among top candidates; run many starts.
-**Related:** GRASP, multi-start.
+## 採用後の実験支援
 
-### C03 Beam search
-**Triggers:** sequential construction; choices have delayed effects; branching moderate; good partial evaluation exists.
-**Idea:** retain diverse top partial states instead of one greedy prefix.
-**Key design:** deduplication, diversity caps, differential updates, optimistic evaluation.
+ユーザーが案を採用して実験を依頼したら、仮説を判別できる小さな実装・比較・計測を支援する。既に与えられた依頼の範囲で進め、採用済みの方針を毎回確認し直さない。
 
-### C04 Diverse beam / 多様性ビーム
-**Triggers:** beam collapses into near-identical states.
-**Idea:** cap children per parent/signature/region; penalize similarity; bucket by structural signature.
+- 比較対象、変える要素、揃える条件、観測値、判別に必要な最小予算を実行前に決める。未実装の案を不利にする比較や、初期性能と改善器の効果を混ぜる比較を避ける。
+- スコア・時間に加え、仮説に直結する構造指標を選ぶ。必要に応じて小問題の厳密解、復元前後の差、入力別の差分、アブレーションを使う。
+- 長期の試行では、仮説・変更・条件・観察・ユーザーの採否を既存の実験メモへ短く残す。再開時は未解決の論点を引き継ぐ。実験メモやログはコンテスト側に置き、Skill内に増やさない。
+- 実装・評価には対象リポジトリの指示と該当する評価Skillを適用する。ヒントだけの依頼で解答プログラムを実装・実行しない。
 
-### C05 Scaffold-first / 骨格先行
-**Triggers:** global topology matters more than local details.
-**Idea:** construct backbone/tree/order/partition first, fill details later.
-**Related:** decoder separation, hierarchical optimization.
+**解答プログラムを実行したら、結果・ログ・観察を報告して止まる。結果に基づく解法・方針・コードの改善は、ユーザーの新たな明示的指示を待つ。** 包括的な実験依頼や本Skillの読込みを、結果から自動で次案へ進む許可と扱わない。小さな試作も、その問題を解くためのプログラムならこの境界に含む。
 
-### C06 Goal anchoring / ゴール固定
-**Triggers:** terminal requirements are hard to satisfy after free construction.
-**Idea:** fix terminal structures first and grow solution around them.
+## 維持と品質確認
 
-### C07 Constraint-first construction / 難制約先行
-**Triggers:** a small subset of items causes most infeasibility.
-**Idea:** place most constrained items first; fill flexible items afterward.
+運用資料はこのSkill、発想の補助資料、発想生成テンプレートの3ファイルに保つ。名称の別名は同じ項目へ統合し、新しい知見は既存の該当節へ戻す。参照できない出典・版別の索引・研究用CSVを増やさない。
 
-### C08 Multi-start elite construction
-**Triggers:** cheap constructors produce qualitatively different basins.
-**Idea:** generate many initial solutions, keep structural elites rather than only best score.
-
-## D. Local search neighborhoods
-
-### D01 Swap
-Exchange two elements/assignments. Baseline neighborhood for permutations and grouping.
-
-### D02 Insert / relocate
-Remove one element and insert elsewhere. Often stronger than swap for ordering.
-
-### D03 Block move
-Move a contiguous segment as one unit. Useful when local subsequences already have good internal structure.
-
-### D04 2-opt / segment reverse
-Reverse an interval to remove geometric/path crossings or reorder sequence cheaply.
-
-### D05 k-opt / edge exchange
-Replace several structural edges at once when 2-opt cannot cross a barrier.
-
-### D06 Split / merge
-**Triggers:** grouping/batching/partitioning.
-**Idea:** split overloaded group or merge underutilized compatible groups.
-
-### D07 Boundary shift
-Move partition boundaries rather than individual items.
-
-### D08 Ejection chain / 押し出し連鎖
-**Triggers:** moving A requires moving B, then C.
-**Idea:** permit a chain of dependent relocations instead of rejecting first conflict.
-
-### D09 Compound move / 複合近傍
-**Triggers:** every useful change requires temporary worsening or multiple coordinated edits.
-**Idea:** package several elementary edits as one neighborhood.
-
-### D10 Adaptive neighborhood mix
-Track acceptance/improvement per neighborhood and shift sampling budget toward productive moves without eliminating exploration.
-
-## E. Destroy & repair
-
-### E01 Large Neighborhood Search (LNS)
-**Triggers:** local optimum; solution decomposes; a subset can be rebuilt effectively.
-**Idea:** destroy a substantial region/interval/group and repair it.
-**Design axes:** destroy selection, destroy size, repair solver, acceptance rule.
-
-### E02 Window reoptimization / 区間再最適化
-**Triggers:** sequence; interactions mostly local; exact solver feasible for short interval.
-**Idea:** freeze outside `[l,r]`, optimize inside with DP/beam/BFS/exhaustive search.
-
-### E03 Worst-part destroy
-Destroy elements with largest marginal cost, conflicts, lateness, detours, or constraint pressure.
-
-### E04 Related destroy
-Destroy mutually related elements (nearby, same resource, same route) so repair can restructure them jointly.
-
-### E05 Random destroy
-Important as diversity baseline; avoids overfitting destroy policy to current evaluator.
-
-### E06 Constraint repair
-Temporarily allow infeasible candidate, then run a dedicated repair operator.
-**Use when:** feasible-space connectivity is poor.
-**Warning:** repair bias can collapse diversity.
-
-### E07 Packet / bundle repair
-**Triggers:** many atomic operations naturally travel together or share capacity.
-**Idea:** repair at packet/bundle granularity instead of individual item granularity.
-**Prompt:** “Which operations should be treated as one indivisible macro-action?”
-
-### E08 Exact micro-solver
-Use DP/BFS/shortest path/matching/flow/exhaustive enumeration as a repair operator on a small subproblem.
-
-## F. Search controllers
-
-### F01 Hill climbing
-Use when neighborhood landscape is smooth and restarts are cheap.
-
-### F02 Simulated annealing (SA)
-Accept worsening moves probabilistically to cross local barriers.
-**Tune:** initial acceptance rate, end temperature, schedule, neighborhood scale.
-
-### F03 Reheating
-Raise temperature after stagnation or after entering a new structural regime.
-
-### F04 Record-to-record travel (RRT)
-Accept solutions within a threshold of the best/record rather than using temperature probability.
-**Useful when:** score scale makes SA temperature awkward.
-
-### F05 Tabu search
-Temporarily forbid recent moves/features to prevent cycling and force exploration.
-
-### F06 Iterated local search / kick
-Run local optimization to convergence, apply a strong perturbation, optimize again.
-
-### F07 Multi-start
-Independent searches from diverse seeds; simple and robust when basins differ strongly.
-
-### F08 Elite pool / path relinking
-Keep multiple high-quality structurally different solutions and search paths/combinations between them.
-
-### F09 Island search
-Run different parameterizations/representations/neighborhood sets in parallel conceptually; occasionally exchange elites.
-
-### F10 Budget ladder / 予算階段
-**Triggers:** need fast diagnosis and scalable search.
-**Idea:** define small/medium/large fixed budgets; an idea must show signal cheaply before receiving more time.
-**Useful for AI agents:** prevents spending implementation/runtime budget on weak ideas.
-
-## G. Evaluation and bounds
-
-### G01 Differential evaluation / 差分評価
-**Triggers:** local mutation changes small part of score.
-**Idea:** update only affected terms.
-**Rule:** evaluator speed directly buys search iterations.
-
-### G02 Cached local fields
-Maintain distance fields, nearest-resource maps, occupancy counts, prefix/suffix aggregates, etc., incrementally.
-
-### G03 Prefix/suffix decomposition
-**Triggers:** sequence score can be composed from left/right summaries.
-**Idea:** precompute prefix/suffix state so interval edits evaluate quickly.
-
-### G04 Surrogate objective / 代理目的
-**Triggers:** true score is sparse/noisy/late.
-**Idea:** optimize smoother proxy correlated with final score, possibly phase-dependent.
-**Warning:** periodically measure proxy-vs-true correlation.
-
-### G05 Potential function / ポテンシャル
-Add estimated future value/cost to partial-state evaluation.
-**Examples:** remaining distance, flexibility, congestion risk, option count.
-
-### G06 Optimistic bound / 楽観上界
-Estimate best possible completion; prune states that cannot beat current threshold.
-
-### G07 Pessimistic bound / 安全下界
-Estimate guaranteed completion quality; useful for robust choice and pruning risky branches.
-
-### G08 Two-stage evaluation / 二段階評価
-Cheap approximate filter first, expensive exact evaluation only for survivors.
-
-### G09 Lazy evaluation
-Delay expensive score components until candidate is competitive on cheap components.
-
-### G10 Bottleneck objective / ボトルネック代理
-Instead of optimizing total score directly, identify the resource/constraint currently limiting improvement and temporarily optimize it.
-
-## H. Speed as an algorithmic technique
-
-### H01 Precomputation
-Distances, transitions, compatibility, masks, local costs, random tables.
-
-### H02 Bitset / bitboard
-Use word-parallel operations for grid sets, reachability, compatibility, coverage.
-
-### H03 Copy elimination
-Use undo logs, persistent structures, shared prefixes, copy-on-write, indices instead of objects.
-
-### H04 Cache-friendly flattening
-Flatten grids/structures; avoid expensive division/modulo or pointer-heavy layouts in hot loops when profiling supports it.
-
-### H05 Dirty-set update
-Track exactly which cells/items/times changed and recompute only them.
-
-### H06 Early reject
-Use a cheap necessary condition or rough delta to reject hopeless moves before full evaluation.
-
-### H07 Batch candidate generation
-Generate candidates cheaply, score approximately, exact-evaluate only top subset.
-
-### H08 Fixed-capacity structures
-Avoid allocation in hot loops; reuse buffers and arrays.
-
-### H09 Profiling-to-search conversion
-Every speedup should be translated into a deliberate gain: wider beam, deeper rollout, larger LNS window, or more SA iterations.
-
-## I. Graph, routing, allocation transformations
-
-### I01 TSP-ification / TSP化
-If the essence is visit order, explicitly convert to a routing/order problem and import 2-opt/insert/LNS ideas.
-
-### I02 Matching-ification / マッチング化
-If decisions are pairings, solve or approximate matching rather than greedy pair selection.
-
-### I03 Flow-ification / フロー化
-If resources move through capacities, model min-cost flow/max-flow locally or globally.
-
-### I04 Assignment decomposition
-Separate “who does what” from “in what order/how to execute”. Optimize layers alternately.
-
-### I05 Tree/backbone extraction
-Find a sparse structural skeleton first; optimize traversal/decoration around it.
-
-### I06 Clustering
-Group spatially/semantically related items before detailed routing.
-**Warning:** clusters may create artificial boundaries; allow cross-cluster repair.
-
-### I07 Voronoi ownership
-Assign items/cells to nearest agents/seeds, then optimize boundaries.
-
-### I08 Minimum spanning scaffold
-Use MST-like structure as a cheap global connectivity prior, then modify for actual objective.
-
-## J. Multi-agent and congestion
-
-### J01 Prioritized planning
-Plan agents sequentially; earlier routes become constraints/reservations for later agents.
-
-### J02 Conflict-Based Search (CBS) idea
-Detect conflicts, branch on which agent receives the constraint, replan locally.
-**AHC use:** often approximate/truncated rather than full exact CBS.
-
-### J03 Reservation table
-Store occupied cells/edges/resources by time; route subsequent agents around reservations.
-
-### J04 Congestion pricing
-Turn shared-resource contention into a dynamic penalty; reroute agents away from overused resources.
-
-### J05 Role assignment
-Give agents differentiated roles/regions/tasks to reduce destructive competition.
-
-### J06 Soft ownership
-Prefer but do not force regions/resources per agent; allow exceptions with penalty.
-
-### J07 Cooperative macro-action
-Search joint actions for a small interacting subset while treating other agents as fixed.
-
-## K. Uncertainty and online decisions
-
-### K01 Rollout
-For each candidate action, simulate plausible futures with a cheap policy and compare expected outcomes.
-
-### K02 Monte Carlo sampling
-Sample unknown opponent/environment parameters rather than optimizing one guessed future.
-
-### K03 Adaptive horizon
-Use long horizon when setup effects dominate; shorten when remaining time/budget shrinks.
-
-### K04 Sequential halving
-Allocate a little simulation budget to many candidates, repeatedly eliminate weaker half, spend more on survivors.
-
-### K05 Robust objective
-Optimize mean minus risk, quantile, worst-of-samples, or opponent-relative score when variance matters.
-
-### K06 Online parameter inference
-Infer opponent/environment parameters from observed actions and update simulation policy.
-
-### K07 Exploration bonus
-When information has future value, reward actions that reduce uncertainty, not only immediate score.
-
-## L. Exact methods embedded inside heuristics
-
-### L01 Beam-inside-SA
-Use beam/DP to rebuild a local region proposed by SA/LNS.
-
-### L02 DP window
-Freeze global solution, solve short interval exactly or near-exactly.
-
-### L03 BFS repair
-Use BFS/shortest path only for the local feasibility gap instead of globally.
-
-### L04 Matching repair
-After destructive move, optimally rematch the affected subset.
-
-### L05 Flow repair
-Use min-cost flow to repair local assignment/capacity violations.
-
-### L06 Branch-and-bound microsearch
-Enumerate a small difficult subset with optimistic bounds.
-
-## M. Meta-ideas: change the question
-
-### M01 Causal repair / 原因を直す
-**Prompt:** “The visible defect is a symptom. Which decision created it?”
-Move repair point upstream rather than patching output.
-
-### M02 Make invalid states searchable / 制約を一時的に破る
-**Prompt:** “Is the feasible space disconnected under our current neighborhood?”
-Allow controlled infeasibility with penalty + repair.
-
-### M03 Optimize options, not score / 選択肢を残す
-**Triggers:** early greedy gains cause late dead ends.
-Reward flexibility: number/quality of future legal choices.
-
-### M04 Change granularity / 粒度を変える
-Try cell->region, item->packet, turn->phase, action->macro-action, agent->team.
-
-### M05 Freeze the good part / 良い部分を固定
-Identify stable high-quality substructure; search only unstable region.
-
-### M06 Unfreeze the assumption / 前提を外す
-List implementation assumptions not required by problem statement (fixed ordering, fixed grouping, monotonicity, one representation). Remove one deliberately.
-
-### M07 Solve the complement / 補集合を解く
-Sometimes easier to choose what NOT to use/visit/assign than what to use.
-
-### M08 Dual viewpoint / 価格を付ける
-Replace hard competition for resources with shadow prices/penalties and iteratively adjust prices.
-
-### M09 Alternate optimization / 交互最適化
-Split coupled variables A/B. Optimize A with B fixed, then B with A fixed; periodically perform joint moves.
-
-### M10 Phase change / フェーズ分離
-Use different objective, neighborhood, or representation in early/middle/late stages rather than one policy throughout.
-
-### M11 Counterfactual replay / 反実仮想再生
-Take a bad seed/state, alter one historical decision, replay, and measure causal delta. Use results to design neighborhoods.
-
-### M12 Adversarial seed mining / 苦手seed採掘
-Cluster worst seeds by failure mechanism, not just score. Create targeted operators for each cluster.
-
-### M13 Oracle calibration / 小問題教師
-Solve tiny/special instances exactly or with huge budget, compare heuristic decisions, and learn which structural choices are systematically wrong.
-
-### M14 Search-space audit / 到達可能性監査
-Before tuning SA temperature, ask whether the neighborhood can even reach qualitatively different good structures.
-
-### M15 Decoder audit / デコーダ監査
-If latent solution looks good but physical execution is bad, measure loss introduced by decoder separately from optimizer loss.
-
-## N. Experiment design for AHC agents
-
-### N01 Seed panel
-Maintain representative seeds: average, worst, structurally distinct, regression seeds.
-
-### N02 Ablation
-Disable one component at a time; do not infer contribution from final combined score only.
-
-### N03 Delta histogram
-Compare per-seed score/move deltas, not only total average. Large regressions often reveal a new failure mode.
-
-### N04 Fixed-budget calibration
-Compare techniques at identical deterministic budgets (small/medium/large) before adaptive tuning.
-
-### N05 Replay verification
-Every saved solution/operator should replay deterministically and preserve invariants before score comparison.
-
-### N06 Structural metrics
-Track intermediate metrics (conflicts, detour, utilization, group sizes, idle time, repair count) to explain score changes.
-
-### N07 Hypothesis ledger
-For every experiment record: hypothesis, structural trigger, expected affected seeds, metric, result, interpretation, next action.
-
----
-
-# Idea generation protocol
-
-When invoking this skill on a concrete problem, produce this compact structure:
-
-## 1. Bottleneck diagnosis
-State 1-3 dominant bottlenecks and evidence.
-
-## 2. Candidate ideas
-For each of 5-10 ideas:
-- **Technique**
-- **Why trigger matches**
-- **Concrete state/representation change**
-- **Concrete move/search/repair**
-- **Expected upside**
-- **Cheap falsification experiment**
-- **Risk / failure mode**
-
-At least two candidates must come from section M or B unless clearly irrelevant.
-
-## 3. Portfolio
-Classify candidates:
-- low-risk incremental
-- medium structural
-- high-risk/high-upside reframing
-
-## 4. Experiment order
-Order by `expected_information_gain / implementation_cost`, not merely expected score.
-
-## 5. Learning extraction
-After experiments, add a reusable technique or trigger if a new pattern was discovered. Prefer generalization over storing problem-specific code.
-
----
-
-# Anti-patterns
-- Do not say only “try SA”, “try beam”, or “tune parameters”. Specify representation and neighborhood.
-- Do not tune temperature before checking search-space reachability.
-- Do not optimize evaluator accuracy if evaluator speed is the actual bottleneck without measuring the tradeoff.
-- Do not trust aggregate score alone; inspect per-seed regressions.
-- Do not preserve implementation constraints that are absent from the statement.
-- Do not use an expensive global solver when it can be embedded as a local repair operator.
-- Do not assume feasibility must be maintained after every micro-move.
-- Do not conflate optimizer quality with decoder quality.
-- Do not keep adding neighborhoods without measuring acceptance, improvement, and unique structural reach.
+見直し時は、問題を読んだ直後・考察中・実装後の停滞という場面で、具体的で異なる候補、採用判断に必要な根拠、低コストの確認方法が出るかを見る。名称の網羅や解説との一致を成功基準にしない。Skillの文面確認と、実戦での有効性の検証は区別して報告する。
